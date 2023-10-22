@@ -10,7 +10,7 @@ import (
 
 	"log/slog"
 
-	"github.com/linguaapp/common/shutdown"
+	"github.com/atcirclesquare/common/shutdown"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
 )

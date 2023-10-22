@@ -1,4 +1,4 @@
-module github.com/linguaapp/common
+module github.com/atcirclesquare/common
 
 go 1.21.1
 
