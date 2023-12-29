@@ -31,9 +31,10 @@ type generator struct{}
 
 func (g generator) Generate() ID {
 	uid := ksuid.New()
+
 	return &id{
 		uid: uid,
-		seq: &ksuid.Sequence{uid},
+		seq: nil,
 	}
 }
 

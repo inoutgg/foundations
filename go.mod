@@ -3,6 +3,7 @@ module github.com/atcirclesquare/common
 go 1.21.1
 
 require (
+	github.com/jackc/pgx/v5 v5.4.3
 	github.com/segmentio/ksuid v1.0.4
 	golang.org/x/crypto v0.14.0
 	golang.org/x/oauth2 v0.13.0
@@ -11,6 +12,8 @@ require (
 
 require (
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	golang.org/x/net v0.16.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
