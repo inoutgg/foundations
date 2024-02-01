@@ -2,6 +2,8 @@ package httputility
 
 import "net/http"
 
+var _ Middleware = (MiddlewareFunc)(nil)
+
 // Middleware is a type that wraps an http.Handler with additional logic.
 type Middleware interface {
 	// Middleware wraps the given handler with the middleware.

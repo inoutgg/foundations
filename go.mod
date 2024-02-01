@@ -3,6 +3,7 @@ module github.com/atcirclesquare/common
 go 1.21.1
 
 require (
+	github.com/go-chi/chi/v5 v5.0.11
 	github.com/jackc/pgx/v5 v5.4.3
 	github.com/segmentio/ksuid v1.0.4
 	golang.org/x/crypto v0.14.0
