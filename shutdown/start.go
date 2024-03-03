@@ -14,7 +14,7 @@ type Starter interface {
 
 // StartWithShutdown starts the given Starter and blocks the goroutine until
 // SIGTERM signal is received.
-func StartWithShutdown(ctx context.Context, starter Starter) {
+func StartWithShutdown(ctx context.Context, starter Starter) error {
 	serverCtx, serverCancel := context.WithCancelCause(ctx)
 	defer serverCancel(nil)
 
@@ -35,4 +35,6 @@ func StartWithShutdown(ctx context.Context, starter Starter) {
 
 	// Wait for server to shutdown
 	<-serverCtx.Done()
+
+	return serverCtx.Err()
 }

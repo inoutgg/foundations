@@ -58,3 +58,13 @@ func (i *id) Next() (bool, ID) {
 
 	return true, &id{uid: uid, seq: i.seq}
 }
+
+// FromBytes returns an ID from the given string.
+func FromString(s string) (ID, error) {
+	ksuid, err := ksuid.Parse(s)
+	if err != nil {
+		return nil, err
+	}
+
+	return &id{uid: ksuid, seq: nil}, nil
+}

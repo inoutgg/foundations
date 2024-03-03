@@ -1,4 +1,4 @@
-package httputility
+package middleware
 
 import "net/http"
 
