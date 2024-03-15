@@ -1,4 +1,4 @@
-package shutdown
+package startstop
 
 import (
 	"context"
@@ -22,11 +22,11 @@ func (r *Registry) Start(ctx context.Context) error {
 	return g.Wait()
 }
 
-func (r *Registry) Shutdown(ctx context.Context) error {
+func (r *Registry) Stop(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	for _, s := range r.starters {
-		g.Go(func() error { return s.Shutdown(ctx) })
+		g.Go(func() error { return s.Stop(ctx) })
 	}
 
 	return g.Wait()

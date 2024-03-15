@@ -2,6 +2,7 @@ package htmlrender
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/atcirclesquare/common/http/middleware"

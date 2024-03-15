@@ -10,12 +10,12 @@ import (
 
 	"log/slog"
 
-	"github.com/atcirclesquare/common/shutdown"
+	"github.com/atcirclesquare/common/startstop"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
 )
 
-var _ shutdown.Starter = (*Server)(nil)
+var _ startstop.Starter = (*Server)(nil)
 
 type Server struct {
 	log      *slog.Logger
@@ -56,7 +56,7 @@ func (s *Server) Start(ctx context.Context) error {
 	return s.listenAndServe()
 }
 
-func (s *Server) Shutdown(ctx context.Context) error {
+func (s *Server) Stop(ctx context.Context) error {
 	deadline, _ := ctx.Deadline()
 	s.log.InfoContext(ctx, "Gracefully shutting down server", "deadline", deadline)
 
