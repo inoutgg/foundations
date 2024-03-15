@@ -9,19 +9,21 @@ import (
 	"github.com/atcirclesquare/common/template/html"
 )
 
-var renderKey = struct{}{}
+type ctxKey struct{}
+
+var kCtxKey = ctxKey{}
 
 func Middleware(r html.Renderer) middleware.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			next.ServeHTTP(w, req.WithContext(context.WithValue(req.Context(), renderKey, &render{r})))
+			next.ServeHTTP(w, req.WithContext(context.WithValue(req.Context(), kCtxKey, &render{r})))
 		})
 	}
 }
 
 // Render renders an HTML template with the given name and variables.
 func Render(w http.ResponseWriter, req *http.Request, name string, vars ...any) error {
-	render, ok := req.Context().Value(renderKey).(*render)
+	render, ok := req.Context().Value(kCtxKey).(*render)
 	if !ok {
 		return errors.New("http/render: unable to retrieve render from request context. Make sure to use corresponding middleware.")
 	}
