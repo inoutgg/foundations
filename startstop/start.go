@@ -36,5 +36,5 @@ func StartBlocking(ctx context.Context, starter Starter) error {
 	// Wait for server to shutdown
 	<-serviceCtx.Done()
 
-	return serviceCtx.Err()
+	return context.Cause(serviceCtx)
 }
