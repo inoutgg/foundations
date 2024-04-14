@@ -2,6 +2,8 @@ package errorhandler
 
 import (
 	"net/http"
+
+	httperror "github.com/atcirclesquare/common/http/error"
 )
 
 var _ Handler = (HandlerFunc)(nil)
@@ -21,13 +23,13 @@ func (f HandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
 
 // ErrorHandler is an interface that can handle errors returned by an Handler.
 type ErrorHandler interface {
-	Handle(w http.ResponseWriter, r *http.Request, err error)
+	ServeHTTP(w http.ResponseWriter, r *http.Request, err error)
 }
 
 // ErrorHandlerFunc is an adapter to handle errors returned by an Handler.
 type ErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, err error)
 
-func (f ErrorHandlerFunc) Handle(w http.ResponseWriter, r *http.Request, err error) {
+func (f ErrorHandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request, err error) {
 	f(w, r, err)
 }
 
@@ -37,8 +39,18 @@ func WithError(errorHandler ErrorHandler) func(Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			err := next.ServeHTTP(w, r)
 			if err != nil {
-				errorHandler.Handle(w, r, err)
+				errorHandler.ServeHTTP(w, r, err)
 			}
 		})
 	}
 }
+
+// DefaultErrorHandler is the default error handler.
+var DefaultErrorHandler = ErrorHandlerFunc(func(w http.ResponseWriter, r *http.Request, err error) {
+	if err, ok := err.(httperror.HttpError); ok {
+		http.Error(w, err.Error(), err.StatusCode())
+		return
+	}
+
+	http.Error(w, err.Error(), http.StatusInternalServerError)
+})

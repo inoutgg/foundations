@@ -14,11 +14,13 @@ type ctxKey struct{}
 var kCtxKey = ctxKey{}
 
 var (
-	ErrDBPoolNotFound = errors.New("http/db: unable to retrieve db pool from request context. Make sure to use corresponding middleware.")
+	ErrDBPoolNotFound = errors.New(
+		"sql/db: unable to retrieve db pool from request context. Make sure to use corresponding middleware.",
+	)
 )
 
-// From returns the pool associated with the given http request.
-func From(req *http.Request) (*pgxpool.Pool, error) {
+// FromRequest returns the pool associated with the given http request.
+func FromRequest(req *http.Request) (*pgxpool.Pool, error) {
 	ctx := req.Context()
 	if pool, ok := ctx.Value(kCtxKey).(*pgxpool.Pool); ok {
 		return pool, nil

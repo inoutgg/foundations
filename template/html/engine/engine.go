@@ -42,7 +42,7 @@ func New(config *Config) Engine {
 func (e *engine) ParseFS(f fs.FS) error {
 	return fs.WalkDir(f, e.root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("render/html: unable to parse templates directory: %w", err)
 		}
 
 		if entry.IsDir() {
@@ -51,18 +51,18 @@ func (e *engine) ParseFS(f fs.FS) error {
 
 		rel, err := filepath.Rel(e.root, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("render/html: unable to parse templates from directory: %w", err)
 		}
 
 		name := strings.TrimSuffix(filepath.ToSlash(rel), e.extension)
 		tpl := e.template.New(name)
 		content, err := fs.ReadFile(f, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("render/html: unable to read template %q: %w", name, err)
 		}
 
 		if _, err := tpl.Parse(string(content)); err != nil {
-			return err
+			return fmt.Errorf("render/html: unable to parse template %q: %w", name, err)
 		}
 
 		return nil
@@ -72,10 +72,15 @@ func (e *engine) ParseFS(f fs.FS) error {
 func (e *engine) Execute(w io.Writer, name string, vars interface{}) error {
 	tpl, err := e.lookup(name)
 	if err != nil {
-		return err
+		return fmt.Errorf("render/html: unable to execute template %q: %w", name, err)
 	}
 
-	return tpl.Execute(w, vars)
+	err = tpl.Execute(w, vars)
+	if err != nil {
+		return fmt.Errorf("render/html: unable to execute template %q: %w", name, err)
+	}
+
+	return nil
 }
 
 func (e *engine) lookup(name string) (*template.Template, error) {

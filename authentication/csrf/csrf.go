@@ -9,58 +9,80 @@ import (
 	"strings"
 )
 
-type Option struct {
+var (
+	DefaultFieldName  = "csrf_token"
+	DefaultHeaderName = "X-CSRF-Token"
+	DefaultCookieName = "csrf_token"
+)
+
+type TokenOption struct {
 	ChecksumSecret string
 	TokenLength    int
 
-	HeaderName string
-	FieldName  string
-
-	CookieName     string
+	HeaderName     string // optional (default: "X-CSRF-Token")
+	FieldName      string // optional (default: "csrf_token")
+	CookieName     string // optional (default: "csrf_token")
 	CookieSecure   bool
 	CookieSameSite http.SameSite
 }
 
-func NewOption(f ...func(*Option)) {
-	opt := &Option{}
-	for _, v := range f {
-		v(opt)
+func NewTokenOption(opts ...func(*TokenOption)) *TokenOption {
+	opt := TokenOption{
+		HeaderName:     DefaultHeaderName,
+		FieldName:      DefaultFieldName,
+		CookieName:     DefaultCookieName,
+		TokenLength:    32,
+		CookieSameSite: http.SameSiteLaxMode,
 	}
+	for _, f := range opts {
+		f(&opt)
+	}
+
+	return &opt
 }
 
-// Token implements CSRF using the double submit cookie pattern.
+func (opt *TokenOption) cookieName() string {
+	name := opt.CookieName
+	if opt.CookieSecure {
+		name = fmt.Sprintf("__Secure-%s", name)
+	}
+
+	return name
+}
+
+// Token implements CSRF token using the double submit cookie pattern.
 type Token struct {
 	value    string
 	checksum string
-	option   *Option
+	option   *TokenOption
 }
 
-// New returns a new CSRF token.
+// newToken returns a new CSRF token.
 // An error is returned if the token cannot be generated.
-func New(opt *Option) (*Token, error) {
+func newToken(opt *TokenOption) (*Token, error) {
 	val, err := randomHexString(opt.TokenLength)
 	if err != nil {
 		return nil, err
 	}
-	checksum := sha256.Sum256([]byte(fmt.Sprintf("%x%s", val, opt.ChecksumSecret)))
 
+	checksum := computeChecksum(val, opt.ChecksumSecret)
 	return &Token{
 		value:    val,
-		checksum: string(checksum[:]),
+		checksum: checksum,
 		option:   opt,
 	}, nil
 }
 
-// FromCookie returns a CSRF token from an HTTP request cookie.
-func FromCookie(r *http.Request, opt *Option) (*Token, error) {
-	cookie, err := r.Cookie(opt.CookieName)
+// fromRequest returns a CSRF token from an HTTP request by reading a cookie.
+func fromRequest(r *http.Request, opt *TokenOption) (*Token, error) {
+	cookie, err := r.Cookie(opt.cookieName())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("authentication/csrf: unable to retrieve cookie: %w", err)
 	}
 
 	parts := strings.Split(cookie.Value, "|")
 	if len(parts) != 2 {
-		return nil, errors.New("invalid token")
+		return nil, errors.New("authentication/csrf: malformed token")
 	}
 
 	tok := &Token{
@@ -69,34 +91,37 @@ func FromCookie(r *http.Request, opt *Option) (*Token, error) {
 		option:   opt,
 	}
 	if !tok.validateChecksum() {
-		return nil, errors.New("invalid token")
+		return nil, errors.New("authentication/csrf: invalid token checksum")
 	}
 
 	return tok, nil
 }
 
-// ValidateRequest returns true if the HTTP request contains a valid CSRF token.
-func ValidateRequest(r *http.Request, opt *Option) bool {
-	tok, err := FromCookie(r, opt)
+// validateRequest returns true if the HTTP request contains a valid CSRF token.
+func validateRequest(r *http.Request, opt *TokenOption) error {
+	tok, err := fromRequest(r, opt)
 	if err != nil {
-		return false
+		return err
 	}
 
-	return !tok.validateRequest(r)
+	return tok.validateRequest(r)
 }
 
 func (t *Token) validateChecksum() bool {
-	checksum := sha256.Sum256([]byte(fmt.Sprintf("%x%s", t.value, t.option.ChecksumSecret)))
-	return t.checksum == string(checksum[:])
+	expectedChecksum := computeChecksum(t.value, t.option.ChecksumSecret)
+	return t.checksum == expectedChecksum
 }
 
-func (t *Token) validateRequest(r *http.Request) bool {
+func (t *Token) validateRequest(r *http.Request) error {
 	opt := t.option
+
+	// Get the CSRF token from the header or the form field.
 	tokValue := r.Header.Get(opt.HeaderName)
 	if tokValue == "" {
 		tokValue = r.PostFormValue(opt.FieldName)
 	}
 
+	// If the token is missing, try to get it from the multipart form.
 	if tokValue == "" && r.MultipartForm != nil {
 		vals := r.MultipartForm.Value[opt.FieldName]
 		if len(vals) > 0 {
@@ -104,7 +129,11 @@ func (t *Token) validateRequest(r *http.Request) bool {
 		}
 	}
 
-	return t.value == tokValue
+	if t.value != tokValue {
+		return errors.New("authentication/csrf: tokens mismatch")
+	}
+
+	return nil
 }
 
 // Value returns the CSRF token value.
@@ -115,13 +144,8 @@ func (t *Token) Value() string {
 // Cookie returns an HTTP cookie containing the CSRF token.
 func (t *Token) Cookie() *http.Cookie {
 	val := fmt.Sprintf("%s|%s", t.value, t.checksum)
-	name := t.option.CookieName
-	if t.option.CookieSecure {
-		name = fmt.Sprintf("__Secure-%s", name)
-	}
-
 	cookie := http.Cookie{
-		Name:     t.option.CookieName,
+		Name:     t.option.cookieName(),
 		Value:    val,
 		HttpOnly: true,
 		Secure:   t.option.CookieSecure,
@@ -131,20 +155,10 @@ func (t *Token) Cookie() *http.Cookie {
 	return &cookie
 }
 
-func parseTokenValue(r *http.Request, opt *Option) string {
-	tokValue := r.Header.Get(opt.HeaderName)
-	if tokValue == "" {
-		tokValue = r.PostFormValue(opt.FieldName)
-	}
-
-	if tokValue == "" && r.MultipartForm != nil {
-		vals := r.MultipartForm.Value[opt.FieldName]
-		if len(vals) > 0 {
-			tokValue = vals[0]
-		}
-	}
-
-	return tokValue
+// computeChecksum return the sha256 checksum of the given value and secret.
+func computeChecksum(val, secret string) string {
+	cs := sha256.Sum256([]byte(fmt.Sprintf("%s%s", val, secret)))
+	return fmt.Sprintf("%x", cs)
 }
 
 func randomHexString(l int) (string, error) {
