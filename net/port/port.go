@@ -1,6 +1,9 @@
 package port
 
-import "net"
+import (
+	"fmt"
+	"net"
+)
 
 const proto = "tcp"
 const addr = ":0"
@@ -9,12 +12,12 @@ const addr = ":0"
 func Free() (int, error) {
 	addr, err := net.ResolveTCPAddr(proto, addr)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("net/port: unable to resolve tcp addr: %w", err)
 	}
 
 	l, err := net.ListenTCP(proto, addr)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("net/port: unable to listen tcp: %w", err)
 	}
 	defer l.Close()
 
