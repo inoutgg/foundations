@@ -29,6 +29,7 @@ func FromRequest(req *http.Request) (*pgxpool.Pool, error) {
 	return nil, ErrDBPoolNotFound
 }
 
+// Middleware returns a middleware that injects the given pool into the request context.
 func Middleware(db *pgxpool.Pool) middleware.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

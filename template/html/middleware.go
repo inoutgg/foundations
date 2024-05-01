@@ -8,6 +8,12 @@ import (
 	"github.com/atcirclesquare/common/http/middleware"
 )
 
+var (
+	ErrMissingContextKey = errors.New(
+		"http/render: unable to retrieve render from request context. Make sure to use corresponding middleware.",
+	)
+)
+
 type ctxKey struct{}
 
 var kCtxKey = ctxKey{}
@@ -24,9 +30,7 @@ func Middleware(r Renderer) middleware.MiddlewareFunc {
 func Render(w http.ResponseWriter, req *http.Request, name string, vars ...any) error {
 	render, ok := req.Context().Value(kCtxKey).(Renderer)
 	if !ok {
-		return errors.New(
-			"http/render: unable to retrieve render from request context. Make sure to use corresponding middleware.",
-		)
+		return ErrMissingContextKey
 	}
 
 	if err := render.Render(w, name, vars); err != nil {
@@ -34,4 +38,11 @@ func Render(w http.ResponseWriter, req *http.Request, name string, vars ...any) 
 	}
 
 	return nil
+}
+
+// MustRender is like Render, but panics if an error occurs.
+func MustRender(w http.ResponseWriter, req *http.Request, name string, vars ...any) {
+	if err := Render(w, req, name, vars...); err != nil {
+		panic(err)
+	}
 }

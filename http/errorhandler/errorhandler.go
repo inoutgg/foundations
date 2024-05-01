@@ -33,9 +33,9 @@ func (f ErrorHandlerFunc) ServeHTTP(w http.ResponseWriter, r *http.Request, err 
 	f(w, r, err)
 }
 
-// WithError returns an http.Handler that handles errors by onError.
-func WithError(errorHandler ErrorHandler) func(Handler) http.Handler {
-	return func(next Handler) http.Handler {
+// WithErrorHandler returns an http.Handler that handles errors by errorHandler.
+func WithErrorHandler(errorHandler ErrorHandler) func(Handler) http.HandlerFunc {
+	return func(next Handler) http.HandlerFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			err := next.ServeHTTP(w, r)
 			if err != nil {

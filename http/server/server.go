@@ -103,8 +103,8 @@ func (s *Server) listenAndServeTLS() error {
 		HostPolicy: autocert.HostWhitelist(s.config.ACMEHosts...),
 	}
 
-	srv1 := &http.Server{Handler: m.HTTPHandler(nil)}
-	srv2 := &http.Server{Handler: s.config.Handler}
+	srv80 := &http.Server{Handler: m.HTTPHandler(nil)}
+	srv443 := &http.Server{Handler: s.config.Handler}
 
 	g.Go(func() error {
 		l, err := listener(80)
@@ -112,7 +112,7 @@ func (s *Server) listenAndServeTLS() error {
 			return err
 		}
 
-		return s.serve(l, srv1)
+		return s.serve(l, srv80)
 	})
 
 	g.Go(func() error {
@@ -121,10 +121,10 @@ func (s *Server) listenAndServeTLS() error {
 			return err
 		}
 
-		return s.serve(l, srv2)
+		return s.serve(l, srv443)
 	})
 
-	s.servers = append(s.servers, srv1, srv2)
+	s.servers = append(s.servers, srv80, srv443)
 
 	return g.Wait()
 }

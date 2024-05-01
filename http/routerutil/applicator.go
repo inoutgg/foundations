@@ -16,17 +16,17 @@ type ApplicatorFunc func(chi.Router) chi.Router
 
 func (af ApplicatorFunc) Apply(r chi.Router) chi.Router { return af(r) }
 
-type Chain struct {
+type ApplicatorChain struct {
 	applicators []Applicator
 }
 
-// NewChain creates a new chain of router applicators.
-func NewChain(applicators ...Applicator) Chain {
-	return Chain{applicators}
+// NewApplicatorChain creates a new chain of router applicators.
+func NewApplicatorChain(applicators ...Applicator) ApplicatorChain {
+	return ApplicatorChain{applicators}
 }
 
 // Apply applies applicators to a given router.
-func (c Chain) Apply(r chi.Router) chi.Router {
+func (c ApplicatorChain) Apply(r chi.Router) chi.Router {
 	for _, applicator := range c.applicators {
 		r = applicator.Apply(r)
 	}

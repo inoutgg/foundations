@@ -1,18 +1,25 @@
 package csrf
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/atcirclesquare/common/random"
 )
 
 var (
 	DefaultFieldName  = "csrf_token"
 	DefaultHeaderName = "X-CSRF-Token"
 	DefaultCookieName = "csrf_token"
+)
+
+var (
+	ErrInvalidToken  = errors.New("authentication/csrf: invalid token")
+	ErrTokenMismatch = errors.New("authentication/csrf: token mismatch")
+	ErrTokenNotFound = errors.New("authentication/csrf: token not found")
 )
 
 type TokenOption struct {
@@ -60,7 +67,7 @@ type Token struct {
 // newToken returns a new CSRF token.
 // An error is returned if the token cannot be generated.
 func newToken(opt *TokenOption) (*Token, error) {
-	val, err := randomHexString(opt.TokenLength)
+	val, err := random.SecureRandomHexString(opt.TokenLength)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +89,7 @@ func fromRequest(r *http.Request, opt *TokenOption) (*Token, error) {
 
 	parts := strings.Split(cookie.Value, "|")
 	if len(parts) != 2 {
-		return nil, errors.New("authentication/csrf: malformed token")
+		return nil, ErrInvalidToken
 	}
 
 	tok := &Token{
@@ -91,7 +98,7 @@ func fromRequest(r *http.Request, opt *TokenOption) (*Token, error) {
 		option:   opt,
 	}
 	if !tok.validateChecksum() {
-		return nil, errors.New("authentication/csrf: invalid token checksum")
+		return nil, ErrInvalidToken
 	}
 
 	return tok, nil
@@ -130,7 +137,7 @@ func (t *Token) validateRequest(r *http.Request) error {
 	}
 
 	if t.value != tokValue {
-		return errors.New("authentication/csrf: tokens mismatch")
+		return ErrTokenMismatch
 	}
 
 	return nil
@@ -159,14 +166,4 @@ func (t *Token) Cookie() *http.Cookie {
 func computeChecksum(val, secret string) string {
 	cs := sha256.Sum256([]byte(fmt.Sprintf("%s%s", val, secret)))
 	return fmt.Sprintf("%x", cs)
-}
-
-func randomHexString(l int) (string, error) {
-	bytes := make([]byte, l)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", bytes), nil
 }

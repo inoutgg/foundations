@@ -14,15 +14,23 @@ type Starter interface {
 
 // StartBlocking starts the given Starter and blocks the goroutine until
 // SIGTERM signal is received.
-func StartBlocking(ctx context.Context, starter Starter) error {
+//
+// An optional signal can be provided to override the default SIGTERM signal.
+func StartBlocking(ctx context.Context, starter Starter, sg ...os.Signal) error {
 	serviceCtx, serviceCancel := context.WithCancelCause(ctx)
 	defer serviceCancel(nil)
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
+	sig := os.Interrupt
+	if len(sg) > 0 {
+		sig = sg[0]
+	}
+
+	sigCh := make(chan os.Signal, 1)
+
+	signal.Notify(sigCh, sig)
 
 	go func(ctx context.Context) {
-		<-sig
+		<-sigCh
 		err := starter.Stop(ctx)
 		serviceCancel(err)
 	}(serviceCtx)
@@ -33,7 +41,7 @@ func StartBlocking(ctx context.Context, starter Starter) error {
 		}
 	}(serviceCtx)
 
-	// Wait for server to shutdown
+	// Wait for the starter to shutdown
 	<-serviceCtx.Done()
 
 	return context.Cause(serviceCtx)

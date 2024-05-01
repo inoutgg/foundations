@@ -12,8 +12,8 @@ type ctxKey struct{}
 
 var kCtxKey = ctxKey{}
 
-// MiddlewareConfig is the configuration for the cookie middleware.
-type MiddlewareConfig struct {
+// Config is the configuration for the cookie middleware.
+type Config struct {
 	// Prod indicates whether the middleware is running in production mode.
 	//
 	// If the middleware is running in production mode, it will set the secure flag
@@ -22,7 +22,7 @@ type MiddlewareConfig struct {
 }
 
 // Middleware returns a middleware that adds cookie manager to the request context.
-func Middleware(config MiddlewareConfig) middleware.MiddlewareFunc {
+func Middleware(config Config) middleware.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			next.ServeHTTP(w, r.WithContext(
