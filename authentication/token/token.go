@@ -3,8 +3,8 @@ package token
 import (
 	"net/http"
 
-	httperror "github.com/atcirclesquare/common/http/error"
-	"github.com/atcirclesquare/common/token"
+	httperror "go.inout.gg/common/http/error"
+	"go.inout.gg/common/token"
 )
 
 // FromRequest returns the token from the given HTTP request.

@@ -7,9 +7,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/atcirclesquare/common/authentication/routes"
-	"github.com/atcirclesquare/common/must"
-	"github.com/atcirclesquare/common/random"
+	"go.inout.gg/common/must"
+	"go.inout.gg/common/random"
 	"golang.org/x/oauth2"
 )
 
@@ -19,7 +18,6 @@ type UserInfo[T any] interface {
 }
 
 type Provider[T any] interface {
-	routes.Applicator
 	ExchangeCode(ctx context.Context, code string) (*oauth2.Token, error)
 	UserInfo(ctx context.Context, token *oauth2.Token) (UserInfo[T], error)
 	AuthCodeURL(state string) string

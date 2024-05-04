@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/atcirclesquare/common/random"
+	"go.inout.gg/common/random"
 )
 
 var (
@@ -31,6 +31,13 @@ type TokenOption struct {
 	CookieName     string // optional (default: "csrf_token")
 	CookieSecure   bool
 	CookieSameSite http.SameSite
+}
+
+// WithChecksumSecret sets the checksum secret on the token option.
+func WithChecksumSecret(secret string) func(*TokenOption) {
+	return func(opt *TokenOption) {
+		opt.ChecksumSecret = secret
+	}
 }
 
 func NewTokenOption(opts ...func(*TokenOption)) *TokenOption {
@@ -143,8 +150,8 @@ func (t *Token) validateRequest(r *http.Request) error {
 	return nil
 }
 
-// Value returns the CSRF token value.
-func (t *Token) Value() string {
+// String returns the CSRF token value.
+func (t *Token) String() string {
 	return t.value
 }
 

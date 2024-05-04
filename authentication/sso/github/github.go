@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/atcirclesquare/common/authentication/routes"
-	"github.com/atcirclesquare/common/authentication/sso"
-	"github.com/atcirclesquare/common/http/routerutil"
 	"github.com/coreos/go-oidc/v3/oidc"
+	"go.inout.gg/common/authentication/sso"
 	"golang.org/x/oauth2"
 )
 
@@ -75,8 +73,4 @@ func (p *provider[T]) ExchangeCode(ctx context.Context, code string) (*oauth2.To
 
 func (p *provider[T]) AuthCodeURL(state string) string {
 	return p.config.AuthCodeURL(state)
-}
-
-func (p *provider[T]) Routes(config *routes.Config) routerutil.Applicator {
-	return nil
 }

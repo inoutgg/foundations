@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/atcirclesquare/common/http/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.inout.gg/common/http/middleware"
 )
 
 type ctxKey struct{}

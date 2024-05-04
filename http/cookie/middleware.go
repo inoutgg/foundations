@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/atcirclesquare/common/http/middleware"
+	"go.inout.gg/common/http/middleware"
 )
 
 type ctxKey struct{}

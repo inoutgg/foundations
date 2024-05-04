@@ -1,4 +1,4 @@
-module github.com/atcirclesquare/common
+module go.inout.gg/common
 
 go 1.21.1
 

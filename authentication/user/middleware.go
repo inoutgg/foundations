@@ -4,24 +4,13 @@ import (
 	"context"
 	"net/http"
 
-	httperror "github.com/atcirclesquare/common/http/error"
-	"github.com/atcirclesquare/common/http/errorhandler"
-	"github.com/google/uuid"
+	httperror "go.inout.gg/common/http/error"
+	"go.inout.gg/common/http/errorhandler"
 )
 
 type ctxKey struct{}
 
 var kCtxKey = ctxKey{}
-
-type User[T any] struct {
-	ID uuid.UUID
-	T  T
-}
-
-// Authenticator authenticates the user.
-type Authenticator[T any] interface {
-	Authenticate(ctx context.Context, r *http.Request) (*User[T], error)
-}
 
 // MiddlewareConfig is the configuration for the middleware.
 type MiddlewareConfig[T any] struct {

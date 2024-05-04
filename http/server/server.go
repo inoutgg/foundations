@@ -10,7 +10,7 @@ import (
 
 	"log/slog"
 
-	"github.com/atcirclesquare/common/startstop"
+	"go.inout.gg/common/startstop"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
 )

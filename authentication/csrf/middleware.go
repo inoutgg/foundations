@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"slices"
 
-	httperror "github.com/atcirclesquare/common/http/error"
-	"github.com/atcirclesquare/common/http/errorhandler"
+	httperror "go.inout.gg/common/http/error"
+	"go.inout.gg/common/http/errorhandler"
 )
 
 type ctxKey struct{}
@@ -19,6 +19,13 @@ type MiddlewareConfig struct {
 	TokenOption    *TokenOption
 	IgnoredMethods []string                  // optional (default: [GET, HEAD, OPTIONS, TRACE])
 	ErrorHandler   errorhandler.ErrorHandler // optional (default: errorhandler.DefaultErrorHandler)
+}
+
+// WithTokenOption sets the TokenOption on the middleware config.
+func WithTokenOption(opt *TokenOption) func(*MiddlewareConfig) {
+	return func(cfg *MiddlewareConfig) {
+		cfg.TokenOption = opt
+	}
 }
 
 // Middleware returns a middleware that adds CSRF token to the request context.
@@ -53,7 +60,7 @@ func Middleware(config ...func(*MiddlewareConfig)) func(next http.Handler) http.
 
 			err = validateRequest(r, cfg.TokenOption)
 			if err != nil {
-				err := httperror.FromError(err, "invalid CSRF token", http.StatusForbidden)
+				err := httperror.FromError(err, http.StatusForbidden, "invalid CSRF token")
 				cfg.ErrorHandler.ServeHTTP(w, r, err)
 				return
 			}
@@ -63,9 +70,14 @@ func Middleware(config ...func(*MiddlewareConfig)) func(next http.Handler) http.
 	}
 }
 
-// FromRequest returns the CSRF token associated with the given http request.
+// FromRequest returns the CSRF token associated with the given HTTP request.
 func FromRequest(r *http.Request) (*Token, error) {
-	tok, ok := r.Context().Value(kCtxKey).(*Token)
+	return FromContext(r.Context())
+}
+
+// FromContext returns the CSRF token associated with the given context.
+func FromContext(ctx context.Context) (*Token, error) {
+	tok, ok := ctx.Value(kCtxKey).(*Token)
 	if !ok {
 		return nil, errors.New(
 			"authentication/csrf: unable to retrieve request context. Make sure to use corresponding middleware.",

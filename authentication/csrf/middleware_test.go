@@ -98,7 +98,7 @@ func TestSuccessCase(t *testing.T) {
 
 	// Test if token is set.
 	req = httptest.NewRequest(http.MethodPost, "/", nil)
-	req.Header.Set(DefaultHeaderName, tok.Value())
+	req.Header.Set(DefaultHeaderName, tok.String())
 	req.AddCookie(tok.Cookie())
 	route.ServeHTTP(rr, req)
 

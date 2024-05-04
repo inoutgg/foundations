@@ -5,7 +5,7 @@ import (
 	"io"
 	"io/fs"
 
-	"github.com/atcirclesquare/common/template/html/engine"
+	"go.inout.gg/common/template/html/engine"
 )
 
 // Renderer renders a template using provided underlying engine.
