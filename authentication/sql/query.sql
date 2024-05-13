@@ -1,7 +1,9 @@
--- name: CreateUser :one
+-- name: CreateUser :copyfrom
 INSERT INTO users (id, email, password_hash)
-VALUES (@id::UUID, @email, @password_hash)
-RETURNING id;
+VALUES (@id::UUID, @email, @password_hash);
+
+-- name: FindUserByID :one
+SELECT * FROM users WHERE id = @id::UUID LIMIT 1;
 
 -- name: FindUserByEmail :one
 SELECT * FROM users WHERE email = @email LIMIT 1;

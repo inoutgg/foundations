@@ -43,8 +43,8 @@ func HandleAuthorize[T any](
 	req *http.Request,
 	provider Provider[T],
 ) (*ProviderState, error) {
-	state := must.Must(random.SecureRandomHexString(32))
-	nonce := must.Must(random.SecureRandomHexString(32))
+	state := must.Must(random.SecureHexString(32))
+	nonce := must.Must(random.SecureHexString(32))
 	url := provider.AuthCodeURL(state)
 
 	return &ProviderState{

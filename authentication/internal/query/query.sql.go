@@ -12,23 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, email, password_hash)
-VALUES ($1::UUID, $2, $3)
-RETURNING id
-`
-
 type CreateUserParams struct {
 	ID           uuid.UUID
 	Email        string
 	PasswordHash *string
-}
-
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.ID, arg.Email, arg.PasswordHash)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
 }
 
 const deleteExpiredPasswordResetTokens = `-- name: DeleteExpiredPasswordResetTokens :exec
@@ -68,6 +55,23 @@ SELECT id, created_at, updated_at, email, password_hash FROM users WHERE email =
 
 func (q *Queries) FindUserByEmail(ctx context.Context, email string) (User, error) {
 	row := q.db.QueryRow(ctx, findUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+		&i.PasswordHash,
+	)
+	return i, err
+}
+
+const findUserByID = `-- name: FindUserByID :one
+SELECT id, created_at, updated_at, email, password_hash FROM users WHERE id = $1::UUID LIMIT 1
+`
+
+func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, findUserByID, id)
 	var i User
 	err := row.Scan(
 		&i.ID,
