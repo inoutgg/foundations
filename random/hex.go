@@ -2,6 +2,7 @@ package random
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 )
 
@@ -23,5 +24,5 @@ func SecureHexString(l int) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("%x", bytes), nil
+	return hex.EncodeToString(bytes), nil
 }

@@ -12,10 +12,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createUser = `-- name: CreateUser :exec
+INSERT INTO users (id, email, password_hash)
+VALUES ($1::UUID, $2, $3)
+`
+
 type CreateUserParams struct {
 	ID           uuid.UUID
 	Email        string
 	PasswordHash *string
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
+	_, err := q.db.Exec(ctx, createUser, arg.ID, arg.Email, arg.PasswordHash)
+	return err
 }
 
 const deleteExpiredPasswordResetTokens = `-- name: DeleteExpiredPasswordResetTokens :exec
@@ -124,6 +134,17 @@ func (q *Queries) LinkUserToSSOProvider(ctx context.Context, arg LinkUserToSSOPr
 		arg.ProviderName,
 		arg.ProviderUserID,
 	)
+	return err
+}
+
+const markPasswordResetTokenAsUsed = `-- name: MarkPasswordResetTokenAsUsed :exec
+UPDATE password_reset_tokens
+SET is_used = TRUE
+WHERE token = $1
+`
+
+func (q *Queries) MarkPasswordResetTokenAsUsed(ctx context.Context, token string) error {
+	_, err := q.db.Exec(ctx, markPasswordResetTokenAsUsed, token)
 	return err
 }
 

@@ -1,4 +1,4 @@
--- name: CreateUser :copyfrom
+-- name: CreateUser :exec
 INSERT INTO users (id, email, password_hash)
 VALUES (@id::UUID, @email, @password_hash);
 
@@ -47,6 +47,11 @@ SELECT *
 FROM password_reset_tokens
 WHERE token = @token
 LIMIT 1 AND expires_at > now();
+
+-- name: MarkPasswordResetTokenAsUsed :exec
+UPDATE password_reset_tokens
+SET is_used = TRUE
+WHERE token = @token;
 
 -- name: DeleteExpiredPasswordResetTokens :exec
 DELETE FROM password_reset_tokens WHERE expires_at < now() RETURNING id;

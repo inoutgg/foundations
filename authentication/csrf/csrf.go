@@ -74,7 +74,7 @@ type Token struct {
 // newToken returns a new CSRF token.
 // An error is returned if the token cannot be generated.
 func newToken(opt *TokenOption) (*Token, error) {
-	val, err := random.SecureRandomHexString(opt.TokenLength)
+	val, err := random.SecureHexString(opt.TokenLength)
 	if err != nil {
 		return nil, err
 	}

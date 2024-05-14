@@ -9,6 +9,10 @@ import (
 
 var _ PasswordHasher = (*BcryptPasswordHasher)(nil)
 
+const (
+	BcryptDefaultCost = bcrypt.DefaultCost
+)
+
 type BcryptPasswordHasher struct {
 	cost int
 }

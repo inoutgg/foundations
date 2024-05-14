@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"go.inout.gg/common/authentication/db/driverpgxv5"
 	"go.inout.gg/common/authentication/internal/query"
 	"go.inout.gg/common/authentication/password"
 	"go.inout.gg/common/authentication/sender"
@@ -33,6 +33,11 @@ type Config struct {
 	TokenExpiryIn time.Duration
 }
 
+// Sender is the interface for sending emails. It sends 2 types of emails:
+// - Password reset request
+// - Password reset success
+type Sender = sender.Sender[any]
+
 // ResetTokenMessagePayload is the payload for the reset token message.
 type PasswordResetRequestMessagePayload struct {
 	Token string
@@ -43,12 +48,11 @@ type PasswordResetSuccessMessagePayload struct{}
 
 type Handler struct {
 	config *Config
-	logger slog.Logger
-	pool   pgxpool.Pool
+	logger *slog.Logger
+	driver *driverpgxv5.Driver
 
 	password.PasswordHasher
-	query.Queries
-	sender.Sender[any]
+	Sender
 }
 
 // HandlePasswordResetRequest handles a password reset request.
@@ -62,13 +66,13 @@ func (h *Handler) HandlePasswordResetRequest(
 		return ErrAuthorizedUser
 	}
 
-	tx, err := h.pool.Begin(ctx)
+	tx, err := h.driver.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("password/reset: failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	q := h.Queries.WithTx(tx)
+	q := tx.Queries()
 	user, err := q.FindUserByEmail(ctx, email)
 	if err != nil {
 		return fmt.Errorf("password/reset: failed to find user: %w", err)
@@ -115,15 +119,14 @@ func (h *Handler) HandlePasswordResetConfirm(
 		return fmt.Errorf("password/reset: failed to hash password: %w", err)
 	}
 
-	tx, err := h.pool.Begin(ctx)
+	tx, err := h.driver.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("password/reset: failed to begin transaction: %w", err)
 	}
 
 	defer tx.Rollback(ctx)
 
-	q := h.Queries.WithTx(tx)
-
+	q := h.driver.Queries()
 	tok, err := q.FindPasswordResetToken(ctx, tokStr)
 	if err != nil {
 		return fmt.Errorf("password/reset: failed to find password reset token: %w", err)
@@ -132,13 +135,16 @@ func (h *Handler) HandlePasswordResetConfirm(
 	if tok.IsUsed {
 		return ErrUsedPasswordResetToken
 	}
-
 	user, err := q.FindUserByID(ctx, tok.UserID)
 	if err != nil {
 		return fmt.Errorf("password/reset: failed to find user: %w", err)
 	}
 
-	if err = q.SetUserPasswordByID(ctx, query.SetUserPasswordByIDParams{
+	if err := q.MarkPasswordResetTokenAsUsed(ctx, tok.Token); err != nil {
+		return fmt.Errorf("password/reset: failed to mark password reset token as used: %w", err)
+	}
+
+	if err := q.SetUserPasswordByID(ctx, query.SetUserPasswordByIDParams{
 		ID:           tok.UserID,
 		PasswordHash: pointer.FromValue(passwordHash),
 	}); err != nil {

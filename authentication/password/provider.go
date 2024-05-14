@@ -13,6 +13,7 @@ import (
 	"go.inout.gg/common/authentication/password/verification"
 	"go.inout.gg/common/pointer"
 	"go.inout.gg/common/sql/dbutil"
+	"go.inout.gg/common/uuidv7"
 )
 
 var (
@@ -46,7 +47,7 @@ func (p *EmailAndPasswordProvider) Register(
 	}
 	defer tx.Rollback(ctx)
 
-	uid, err = p.createTx(ctx, email, passwordHash, tx)
+	uid, err = p.registerTx(ctx, email, passwordHash, tx)
 	if err != nil {
 		return uid, err
 	}
@@ -58,19 +59,18 @@ func (p *EmailAndPasswordProvider) Register(
 	return uid, nil
 }
 
-func (p *EmailAndPasswordProvider) createTx(
+func (p *EmailAndPasswordProvider) registerTx(
 	ctx context.Context,
 	email, passwordHash string,
 	tx pgx.Tx,
 ) (uuid.UUID, error) {
-	var uid uuid.UUID
+	uid := uuidv7.Must()
 	q := p.Queries.WithTx(tx)
-	uid, err := q.CreateUser(ctx, query.CreateUserParams{
-		ID:           uuid.New(),
+	if err := q.CreateUser(ctx, query.CreateUserParams{
+		ID:           uid,
 		Email:        email,
-		PasswordHash: &passwordHash,
-	})
-	if err != nil {
+		PasswordHash: pointer.FromValue(passwordHash),
+	}); err != nil {
 		if dbutil.IsUniqueViolationError(err) {
 			return uid, ErrEmailAlreadyTaken
 		}

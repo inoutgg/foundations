@@ -2,8 +2,12 @@ package passwordreset
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
+	"go.inout.gg/common/authentication/db/driverpgxv5"
+	"go.inout.gg/common/authentication/password"
+	"go.inout.gg/common/authentication/sender"
 	httperror "go.inout.gg/common/http/error"
 )
 
@@ -24,7 +28,7 @@ type FormConfig struct {
 
 // FormHandler is a wrapper around Handler handling HTTP form requests.
 type FormHandler struct {
-	h *Handler
+	*Handler
 }
 
 // NewFormConfig creates a new FormConfig with the given configuration options.
@@ -59,14 +63,23 @@ type ConfirmForm struct {
 }
 
 // NewFormHandler creates a new FormHandler with the given configuration.
-func NewFormHandler(config *FormConfig) *FormHandler {
-	h := &Handler{
+func NewFormHandler(
+	logger *slog.Logger,
+	driver *driverpgxv5.Driver,
+	hasher password.PasswordHasher,
+	sender sender.Sender[any],
+	config *FormConfig,
+) *FormHandler {
+	handler := &Handler{
 		config: config.Config,
+		logger: logger,
+		driver: driver,
+
+		PasswordHasher: hasher,
+		Sender:         sender,
 	}
 
-	return &FormHandler{
-		h: h,
-	}
+	return &FormHandler{handler}
 }
 
 func (h *FormHandler) parsePasswordResetRequestForm(
@@ -83,7 +96,7 @@ func (h *FormHandler) HandlePasswordResetRequest(req *http.Request) error {
 		return httperror.FromError(err, http.StatusBadRequest)
 	}
 
-	if err := h.h.HandlePasswordResetRequest(ctx, form.Email); err != nil {
+	if err := h.Handler.HandlePasswordResetRequest(ctx, form.Email); err != nil {
 		if errors.Is(err, ErrAuthorizedUser) {
 			return httperror.FromError(err, http.StatusForbidden)
 		}
@@ -106,7 +119,7 @@ func (h *FormHandler) HandlePasswordResetConfirm(req *http.Request) error {
 		return httperror.FromError(err, http.StatusBadRequest)
 	}
 
-	if err := h.h.HandlePasswordResetConfirm(ctx, form.Password, form.ResetToken); err != nil {
+	if err := h.Handler.HandlePasswordResetConfirm(ctx, form.Password, form.ResetToken); err != nil {
 		if errors.Is(err, ErrAuthorizedUser) {
 			return httperror.FromError(err, http.StatusForbidden)
 		} else if errors.Is(err, ErrUsedPasswordResetToken) {
