@@ -1,7 +1,6 @@
 package union
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
@@ -17,14 +16,11 @@ func New[T any](authenticators ...strategy.Authenticator[T]) strategy.Authentica
 	return union[T](authenticators)
 }
 
-func (union union[T]) Authenticate(
-	ctx context.Context,
-	r *http.Request,
-) (*strategy.User[T], error) {
+func (u union[T]) Authenticate(w http.ResponseWriter, r *http.Request) (*strategy.User[T], error) {
 	errs := make([]error, 0)
 
-	for _, authenticator := range union {
-		user, err := authenticator.Authenticate(ctx, r)
+	for _, authenticator := range u {
+		user, err := authenticator.Authenticate(w, r)
 		if err != nil {
 			errs = append(errs, err)
 		} else {
@@ -33,4 +29,8 @@ func (union union[T]) Authenticate(
 	}
 
 	return nil, errors.Join(errs...)
+}
+
+func (u union[T]) LogOut(w http.ResponseWriter, r *http.Request) error {
+	return errors.ErrUnsupported
 }

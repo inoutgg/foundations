@@ -2,12 +2,18 @@ package user
 
 import (
 	"context"
+	"errors"
 	"net/http"
+
+	"log/slog"
 
 	"go.inout.gg/common/authentication/strategy"
 	httperror "go.inout.gg/common/http/error"
 	"go.inout.gg/common/http/errorhandler"
-	"log/slog"
+)
+
+var (
+	ErrUnauthorizedUser = errors.New("authentication/user: unauthorized user access")
 )
 
 type ctxKey struct{}
@@ -15,24 +21,39 @@ type ctxKey struct{}
 var kCtxKey = ctxKey{}
 
 // MiddlewareConfig is the configuration for the middleware.
-type MiddlewareConfig[T any] struct {
-	RaiseOnUnauthorizedAccess bool
-	Authenticator             strategy.Authenticator[T]
-	ErrorHandler              errorhandler.ErrorHandler
-	Logger                    *slog.Logger
+type MiddlewareConfig struct {
+	Logger *slog.Logger
+
+	// ErrorHandler is the error handler that is called when the user is not
+	// authenticated.
+	// If nil, the default error handler is used.
+	ErrorHandler errorhandler.ErrorHandler
+
+	// Passthrough controls whether the request should be failed
+	// on unauthorized access.
+	Passthrough bool
 }
 
 // Middleware returns a middleware that authenticates the user and
 // adds it to the request context.
 //
 // If the user is not authenticated, the error handler is called.
-func Middleware[T any](config *MiddlewareConfig[T]) func(http.Handler) http.Handler {
+func Middleware[T any](
+	authenticator strategy.Authenticator[T],
+	config *MiddlewareConfig,
+) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
+		eh := config.ErrorHandler
+		if eh == nil {
+			eh = errorhandler.DefaultErrorHandler
+		}
+
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			user, err := config.Authenticator.Authenticate(r.Context(), r)
+			user, err := authenticator.Authenticate(w, r)
 			if err != nil {
-				if config.RaiseOnUnauthorizedAccess {
-					config.ErrorHandler.ServeHTTP(
+				// If Passthrough is not set ignore the error and continue.
+				if !config.Passthrough {
+					eh.ServeHTTP(
 						w,
 						r,
 						httperror.FromError(err, http.StatusUnauthorized, "unauthorized access"),
@@ -41,7 +62,9 @@ func Middleware[T any](config *MiddlewareConfig[T]) func(http.Handler) http.Hand
 					return
 				}
 
-				config.Logger.InfoContext(r.Context(), "unauthorized access", "error", err)
+				if config.Logger != nil {
+					config.Logger.WarnContext(r.Context(), "unauthorized access", "error", err)
+				}
 			}
 
 			newCtx := context.WithValue(r.Context(), kCtxKey, user)

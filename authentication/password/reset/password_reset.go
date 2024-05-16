@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"go.inout.gg/common/authentication/db/driverpgxv5"
+	"go.inout.gg/common/authentication/db/driver"
 	"go.inout.gg/common/authentication/internal/query"
 	"go.inout.gg/common/authentication/password"
 	"go.inout.gg/common/authentication/sender"
@@ -33,11 +33,6 @@ type Config struct {
 	TokenExpiryIn time.Duration
 }
 
-// Sender is the interface for sending emails. It sends 2 types of emails:
-// - Password reset request
-// - Password reset success
-type Sender = sender.Sender[any]
-
 // ResetTokenMessagePayload is the payload for the reset token message.
 type PasswordResetRequestMessagePayload struct {
 	Token string
@@ -49,10 +44,10 @@ type PasswordResetSuccessMessagePayload struct{}
 type Handler struct {
 	config *Config
 	logger *slog.Logger
-	driver *driverpgxv5.Driver
+	driver driver.Driver
 
 	password.PasswordHasher
-	Sender
+	sender.Sender
 }
 
 // HandlePasswordResetRequest handles a password reset request.
@@ -96,9 +91,8 @@ func (h *Handler) HandlePasswordResetRequest(
 		return fmt.Errorf("password/reset: failed to commit transaction: %w", err)
 	}
 
-	if err := h.Sender.Send(ctx, sender.Message[any]{
+	if err := h.Sender.Send(ctx, sender.Message{
 		Email: user.Email,
-		Name:  "",
 		Payload: PasswordResetRequestMessagePayload{
 			Token: tok.Token,
 		},
@@ -126,7 +120,7 @@ func (h *Handler) HandlePasswordResetConfirm(
 
 	defer tx.Rollback(ctx)
 
-	q := h.driver.Queries()
+	q := tx.Queries()
 	tok, err := q.FindPasswordResetToken(ctx, tokStr)
 	if err != nil {
 		return fmt.Errorf("password/reset: failed to find password reset token: %w", err)
@@ -151,14 +145,18 @@ func (h *Handler) HandlePasswordResetConfirm(
 		return fmt.Errorf("password/reset: failed to set user password: %w", err)
 	}
 
+	// Once password is changed, we need to expire all sessions for this user
+	// due to security reasons.
+	if _, err := q.ExpireAllSessionsByUserID(ctx, user.ID); err != nil {
+		return fmt.Errorf("password/reset: failed to expire sessions: %w", err)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("password/reset: failed to commit transaction: %w", err)
 	}
 
-	if err := h.Sender.Send(ctx, sender.Message[any]{
-		Email: user.Email,
-		// TODO: add name to user.
-		Name:    "",
+	if err := h.Sender.Send(ctx, sender.Message{
+		Email:   user.Email,
 		Payload: PasswordResetSuccessMessagePayload{},
 	}); err != nil {
 		return fmt.Errorf("password/reset: failed to send success message: %w", err)

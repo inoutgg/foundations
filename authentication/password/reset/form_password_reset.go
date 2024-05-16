@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"go.inout.gg/common/authentication/db/driverpgxv5"
+	"go.inout.gg/common/authentication/db/driver"
 	"go.inout.gg/common/authentication/password"
 	"go.inout.gg/common/authentication/sender"
 	httperror "go.inout.gg/common/http/error"
@@ -65,9 +65,9 @@ type ConfirmForm struct {
 // NewFormHandler creates a new FormHandler with the given configuration.
 func NewFormHandler(
 	logger *slog.Logger,
-	driver *driverpgxv5.Driver,
+	driver driver.Driver,
 	hasher password.PasswordHasher,
-	sender sender.Sender[any],
+	sender sender.Sender,
 	config *FormConfig,
 ) *FormHandler {
 	handler := &Handler{

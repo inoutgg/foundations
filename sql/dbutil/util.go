@@ -1,6 +1,11 @@
 package dbutil
 
-import "github.com/jackc/pgx/v5/pgconn"
+import (
+	"errors"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+)
 
 const (
 	ErrCodeUniqueViolation = "23505"
@@ -13,4 +18,13 @@ func IsUniqueViolationError(err error) bool {
 	}
 
 	return true
+}
+
+// IsNotFoundError returns true if the error is a pgx no rows error.
+func IsNotFoundError(err error) bool {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return true
+	}
+
+	return false
 }

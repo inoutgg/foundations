@@ -3,14 +3,13 @@ package sender
 import "context"
 
 // Message is a message to be sent.
-type Message[TPayload any] struct {
+type Message struct {
 	Email   string
-	Name    string
-	Payload TPayload
+	Payload any
 }
 
 // Sender is an interface for sending email messages.
-type Sender[T any] interface {
+type Sender interface {
 	// Send sends the given message.
-	Send(ctx context.Context, message Message[T]) error
+	Send(ctx context.Context, message Message) error
 }

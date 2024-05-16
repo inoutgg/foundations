@@ -29,9 +29,27 @@ type SsoProviderUser struct {
 }
 
 type User struct {
-	ID           uuid.UUID
-	CreatedAt    pgtype.Timestamp
-	UpdatedAt    pgtype.Timestamp
-	Email        string
-	PasswordHash *string
+	ID              uuid.UUID
+	CreatedAt       pgtype.Timestamp
+	UpdatedAt       pgtype.Timestamp
+	Email           string
+	IsEmailVerified bool
+	PasswordHash    *string
+}
+
+type UserEmailVerificationToken struct {
+	ID        uuid.UUID
+	CreatedAt pgtype.Timestamp
+	UpdatedAt pgtype.Timestamp
+	Token     string
+	Email     string
+	UserID    uuid.UUID
+}
+
+type UserSession struct {
+	ID        uuid.UUID
+	CreatedAt pgtype.Timestamp
+	UpdatedAt pgtype.Timestamp
+	ExpiresAt pgtype.Timestamp
+	UserID    uuid.UUID
 }

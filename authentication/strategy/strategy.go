@@ -1,7 +1,6 @@
 package strategy
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -14,5 +13,6 @@ type User[T any] struct {
 
 // Authenticator authenticates the user.
 type Authenticator[T any] interface {
-	Authenticate(ctx context.Context, r *http.Request) (*User[T], error)
+	Authenticate(http.ResponseWriter, *http.Request) (*User[T], error)
+	LogOut(http.ResponseWriter, *http.Request) error
 }

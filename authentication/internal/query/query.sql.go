@@ -28,6 +28,25 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	return err
 }
 
+const createUserSession = `-- name: CreateUserSession :one
+INSERT INTO user_sessions (id, user_id, expires_at)
+VALUES ($1::UUID, $2::UUID, $3)
+RETURNING id
+`
+
+type CreateUserSessionParams struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	ExpiresAt pgtype.Timestamp
+}
+
+func (q *Queries) CreateUserSession(ctx context.Context, arg CreateUserSessionParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, createUserSession, arg.ID, arg.UserID, arg.ExpiresAt)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const deleteExpiredPasswordResetTokens = `-- name: DeleteExpiredPasswordResetTokens :exec
 DELETE FROM password_reset_tokens WHERE expires_at < now() RETURNING id
 `
@@ -35,6 +54,43 @@ DELETE FROM password_reset_tokens WHERE expires_at < now() RETURNING id
 func (q *Queries) DeleteExpiredPasswordResetTokens(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteExpiredPasswordResetTokens)
 	return err
+}
+
+const expireAllSessionsByUserID = `-- name: ExpireAllSessionsByUserID :many
+UPDATE user_sessions
+SET expires_at = NOW()
+WHERE user_id = $1::UUID
+RETURNING id
+`
+
+func (q *Queries) ExpireAllSessionsByUserID(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, expireAllSessionsByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const expireSessionByID = `-- name: ExpireSessionByID :one
+UPDATE user_sessions SET expires_at = NOW() WHERE id = $1::UUID RETURNING id
+`
+
+func (q *Queries) ExpireSessionByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, expireSessionByID, id)
+	err := row.Scan(&id)
+	return id, err
 }
 
 const findPasswordResetToken = `-- name: FindPasswordResetToken :one
@@ -60,7 +116,7 @@ func (q *Queries) FindPasswordResetToken(ctx context.Context, token string) (Pas
 }
 
 const findUserByEmail = `-- name: FindUserByEmail :one
-SELECT id, created_at, updated_at, email, password_hash FROM users WHERE email = $1 LIMIT 1
+SELECT id, created_at, updated_at, email, is_email_verified, password_hash FROM users WHERE email = $1 LIMIT 1
 `
 
 func (q *Queries) FindUserByEmail(ctx context.Context, email string) (User, error) {
@@ -71,13 +127,14 @@ func (q *Queries) FindUserByEmail(ctx context.Context, email string) (User, erro
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Email,
+		&i.IsEmailVerified,
 		&i.PasswordHash,
 	)
 	return i, err
 }
 
 const findUserByID = `-- name: FindUserByID :one
-SELECT id, created_at, updated_at, email, password_hash FROM users WHERE id = $1::UUID LIMIT 1
+SELECT id, created_at, updated_at, email, is_email_verified, password_hash FROM users WHERE id = $1::UUID LIMIT 1
 `
 
 func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -88,6 +145,7 @@ func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Email,
+		&i.IsEmailVerified,
 		&i.PasswordHash,
 	)
 	return i, err
@@ -110,6 +168,26 @@ func (q *Queries) FindUserBySSOProvider(ctx context.Context, arg FindUserBySSOPr
 	var column_1 interface{}
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const findUserSessionByID = `-- name: FindUserSessionByID :one
+SELECT id, created_at, updated_at, expires_at, user_id
+FROM user_sessions
+WHERE id = $1::UUID AND expires_at < NOW()
+LIMIT 1
+`
+
+func (q *Queries) FindUserSessionByID(ctx context.Context, id uuid.UUID) (UserSession, error) {
+	row := q.db.QueryRow(ctx, findUserSessionByID, id)
+	var i UserSession
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ExpiresAt,
+		&i.UserID,
+	)
+	return i, err
 }
 
 const linkUserToSSOProvider = `-- name: LinkUserToSSOProvider :exec

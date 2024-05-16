@@ -8,6 +8,7 @@ import (
 
 	httperror "go.inout.gg/common/http/error"
 	"go.inout.gg/common/http/errorhandler"
+	"go.inout.gg/common/http/middleware"
 )
 
 type ctxKey struct{}
@@ -29,7 +30,7 @@ func WithTokenOption(opt *TokenOption) func(*MiddlewareConfig) {
 }
 
 // Middleware returns a middleware that adds CSRF token to the request context.
-func Middleware(config ...func(*MiddlewareConfig)) func(next http.Handler) http.Handler {
+func Middleware(config ...func(*MiddlewareConfig)) middleware.MiddlewareFunc {
 	cfg := MiddlewareConfig{
 		IgnoredMethods: []string{
 			http.MethodGet,

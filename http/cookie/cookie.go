@@ -5,54 +5,10 @@ import (
 	"time"
 )
 
-var _ Cookie = (*cookie)(nil)
-
-type CookieOption struct {
-	SameSite http.SameSite
-	// Controls whether cookie can be accessed through JavaScript.
-	HttpOnly  bool
-	ExpiresIn time.Duration
-	Path      string
-}
-
-type Cookie interface {
-	// Set sets a cookie with the given name and value.
-	Set(string, string, ...func(*CookieOption))
-
-	// Get returns the value of the cookie with the given name. If the
-	Get(string) string
-
-	// Delete deletes the cookie with the given name.
-	Delete(string, ...func(*CookieOption))
-}
-
-type cookie struct {
-	req    *http.Request
-	resp   http.ResponseWriter
-	secure bool
-}
-
-func (c *cookie) Set(name string, value string, cfg ...func(*CookieOption)) {
-	config := newConfig(cfg...)
-
-	var expiresAt time.Time
-	if config.ExpiresIn != 0 {
-		expiresAt = time.Now().Add(config.ExpiresIn * time.Second)
-	}
-
-	http.SetCookie(c.resp, &http.Cookie{
-		Name:     name,
-		Value:    value,
-		HttpOnly: config.HttpOnly,
-		Secure:   c.secure,
-		SameSite: config.SameSite,
-		Expires:  expiresAt,
-		Path:     config.Path,
-	})
-}
-
-func (c *cookie) Get(name string) string {
-	cookie, err := c.req.Cookie(name)
+// Get returns the value of the cookie with the given name. If the
+// cookie is not found, the empty string is returned.
+func Get(r *http.Request, name string) string {
+	cookie, err := r.Cookie(name)
 	if err != nil {
 		return ""
 	}
@@ -60,27 +16,73 @@ func (c *cookie) Get(name string) string {
 	return cookie.Value
 }
 
-func (c *cookie) Delete(name string, cfg ...func(*CookieOption)) {
-	config := newConfig(cfg...)
-	http.SetCookie(c.resp, &http.Cookie{
+// Option is a set of options for setting a cookie.
+type Option struct {
+	ExpiresIn time.Duration
+	Domain    string
+	Secure    bool
+	HttpOnly  bool
+	SameSite  http.SameSite
+	Path      string
+}
+
+// WithExpiresIn sets the ExpiresIn option on the cookie.
+func WithExpiresIn(expiresIn time.Duration) func(*Option) {
+	return func(opt *Option) { opt.ExpiresIn = expiresIn }
+}
+
+// WithHttpOnly sets the HttpOnly flag on the cookie.
+func WithHttpOnly() func(*Option) { return func(opt *Option) { opt.HttpOnly = true } }
+
+// WithSecure sets the Secure flag on the cookie.
+func WithSecure() func(*Option) { return func(opt *Option) { opt.Secure = true } }
+
+// WithSameSite sets the SameSite flag on the cookie.
+func WithSameSite(sameSite http.SameSite) func(*Option) {
+	return func(opt *Option) { opt.SameSite = sameSite }
+}
+
+// WithDomain sets the Domain flag on the cookie.
+func WithDomain(domain string) func(*Option) {
+	return func(opt *Option) { opt.Domain = domain }
+}
+
+// Set sets the cookie with the given name and value.
+func Set(w http.ResponseWriter, name, value string, options ...func(*Option)) {
+	opt := Option{
+		SameSite: http.SameSiteDefaultMode,
+	}
+
+	for _, o := range options {
+		o(&opt)
+	}
+
+	http.SetCookie(w, &http.Cookie{
 		Name:     name,
-		Value:    "",
-		HttpOnly: true,
-		Secure:   c.secure,
-		SameSite: config.SameSite,
-		MaxAge:   -1,
+		Value:    value,
+		Path:     opt.Path,
+		Domain:   opt.Domain,
+		HttpOnly: opt.HttpOnly,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().Add(opt.ExpiresIn),
 	})
 }
 
-// newConfig creates a new CookieOption from the given functions.
-func newConfig(cfg ...func(*CookieOption)) CookieOption {
-	config := CookieOption{
-		SameSite: http.SameSiteLaxMode,
-		HttpOnly: true,
-	}
-	for _, f := range cfg {
-		f(&config)
+// Delete deletes the cookie with the given name if it exists.
+func Delete(w http.ResponseWriter, r *http.Request, name string) {
+	cookie, err := r.Cookie(name)
+	if err != nil {
+		return
 	}
 
-	return config
+	http.SetCookie(
+		w,
+		&http.Cookie{
+			Name:     name,
+			Value:    "",
+			MaxAge:   -1,
+			HttpOnly: cookie.HttpOnly,
+			SameSite: cookie.SameSite,
+		},
+	)
 }
