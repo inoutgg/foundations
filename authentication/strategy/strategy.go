@@ -14,5 +14,4 @@ type User[T any] struct {
 // Authenticator authenticates the user.
 type Authenticator[T any] interface {
 	Authenticate(http.ResponseWriter, *http.Request) (*User[T], error)
-	LogOut(http.ResponseWriter, *http.Request) error
 }

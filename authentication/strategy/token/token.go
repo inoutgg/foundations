@@ -43,7 +43,3 @@ func (t *tok[T]) Authenticate(w http.ResponseWriter, r *http.Request) (*strategy
 
 	return user, nil
 }
-
-func (t *tok[T]) LogOut(w http.ResponseWriter, r *http.Request) error {
-	return errors.ErrUnsupported
-}

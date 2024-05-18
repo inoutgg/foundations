@@ -10,7 +10,6 @@ import (
 	"go.inout.gg/common/authentication/strategy"
 	"go.inout.gg/common/authentication/user"
 	"go.inout.gg/common/http/cookie"
-	httperror "go.inout.gg/common/http/error"
 	"go.inout.gg/common/sql/dbutil"
 )
 
@@ -78,23 +77,4 @@ func (s *session[T]) decodeSession(val string) (string, error) {
 	}
 
 	return string(bytes), nil
-}
-
-func (s *session[T]) LogOut(w http.ResponseWriter, r *http.Request) error {
-	ctx := r.Context()
-	q := s.driver.Queries()
-
-	usr := user.FromRequest[any](r)
-	if usr == nil {
-		return httperror.FromError(user.ErrUnauthorizedUser, http.StatusUnauthorized)
-	}
-
-	if _, err := q.ExpireSessionByID(ctx, usr.ID); err != nil {
-		return httperror.FromError(err, http.StatusInternalServerError)
-	}
-
-	// Delete session cookie.
-	cookie.Delete(w, r, s.config.CookieName)
-
-	return nil
 }

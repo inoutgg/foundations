@@ -30,7 +30,3 @@ func (u union[T]) Authenticate(w http.ResponseWriter, r *http.Request) (*strateg
 
 	return nil, errors.Join(errs...)
 }
-
-func (u union[T]) LogOut(w http.ResponseWriter, r *http.Request) error {
-	return errors.ErrUnsupported
-}
