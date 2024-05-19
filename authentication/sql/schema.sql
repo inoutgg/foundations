@@ -4,7 +4,7 @@ CREATE TABLE users (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   email VARCHAR(255) NOT NULL,
   is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
-  password_hash VARCHAR(4095) NULL,
+  password_hash BYTEA(4095) NULL,
   PRIMARY KEY (id),
   UNIQUE (email)
 );
@@ -58,9 +58,10 @@ CREATE TABLE user_sessions (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at TIMESTAMP NOT NULL,
+  token VARCHAR(128) NOT NULL,
   user_id UUID NOT NULL,
   PRIMARY KEY (user_id, id),
-  UNIQUE (id),
+  UNIQUE (token),
   FOREIGN KEY (user_id) REFERENCES users (id)
     ON DELETE CASCADE,
   CHECK (expires_at > CURRENT_TIMESTAMP),

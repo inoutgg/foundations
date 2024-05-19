@@ -19,18 +19,63 @@ import (
 )
 
 var (
-	ErrAuthorizedUser         = fmt.Errorf("password/reset: authorized user access")
+	// ErrAuthorizedUser is returned when an authorized user tries to access the password reset form.
+	ErrAuthorizedUser = fmt.Errorf("password/reset: authorized user access")
+
+	// ErrUsedPasswordResetToken is returned when the password reset token has already been used.
 	ErrUsedPasswordResetToken = fmt.Errorf("password/reset: used password reset token")
 )
 
 const (
-	TokenExpiry = 12 * time.Hour
-	TokenLength = 32
+	ResetTokenExpiry = time.Duration(12 * time.Hour)
+	ResetTokenLength = 32
 )
 
+// Config is the configuration for the password handler.
+//
+// Make sure to use the NewConfig function to create a new config, instead
+// of instatiating the struct directly.
 type Config struct {
-	TokenLength   int
-	TokenExpiryIn time.Duration
+	PasswordHasher password.PasswordHasher // optional
+	Logger         *slog.Logger            // optional
+
+	// TokenLength set the length of the reset token.
+	//
+	// Defaults to ResetTokenExpiry.
+	TokenLength int // optinal
+	// TokenExpiryIn set the expiry time of the reset token.
+	TokenExpiryIn time.Duration // optional
+}
+
+// NewConfig creates a new config.
+func NewConfig(config ...func(*Config)) *Config {
+	cfg := Config{
+		TokenExpiryIn: ResetTokenExpiry,
+		TokenLength:   ResetTokenLength,
+	}
+
+	for _, f := range config {
+		f(&cfg)
+	}
+
+	if cfg.PasswordHasher == nil {
+		cfg.PasswordHasher = password.DefaultPasswordHasher
+	}
+
+	return &cfg
+}
+
+// WithPasswordHasher configures the password hasher.
+//
+// When setting a password hasher make sure to set it across all modules,
+// such as user registrration, password reset and password verification.
+func WithPasswordHasher(hasher password.PasswordHasher) func(*Config) {
+	return func(cfg *Config) { cfg.PasswordHasher = hasher }
+}
+
+// WithLogger configures the logger.
+func WithLogger(logger *slog.Logger) func(*Config) {
+	return func(cfg *Config) { cfg.Logger = logger }
 }
 
 // ResetTokenMessagePayload is the payload for the reset token message.
@@ -41,13 +86,17 @@ type PasswordResetRequestMessagePayload struct {
 // PasswordResetSuccessMessagePayload is the payload for the password reset success message.
 type PasswordResetSuccessMessagePayload struct{}
 
+// Handler handles password reset requests.
+//
+// It is a general enough implementation so it can be used for different
+// communication methods.
+//
+// Check out the FormHandler for a ready to use implementation that handles
+// HTTP form requests.
 type Handler struct {
 	config *Config
-	logger *slog.Logger
 	driver driver.Driver
-
-	password.PasswordHasher
-	sender.Sender
+	sender sender.Sender
 }
 
 // HandlePasswordResetRequest handles a password reset request.
@@ -91,7 +140,7 @@ func (h *Handler) HandlePasswordResetRequest(
 		return fmt.Errorf("password/reset: failed to commit transaction: %w", err)
 	}
 
-	if err := h.Sender.Send(ctx, sender.Message{
+	if err := h.sender.Send(ctx, sender.Message{
 		Email: user.Email,
 		Payload: PasswordResetRequestMessagePayload{
 			Token: tok.Token,
@@ -107,8 +156,10 @@ func (h *Handler) HandlePasswordResetConfirm(
 	ctx context.Context,
 	password, tokStr string,
 ) error {
-	// Hash password upfront to avoid unnecessary database TX delay.
-	passwordHash, err := h.PasswordHasher.Hash(password)
+	ph := h.config.PasswordHasher
+
+	// NOTE: hash password upfront to avoid unnecessary database TX delay.
+	passwordHash, err := ph.Hash(password)
 	if err != nil {
 		return fmt.Errorf("password/reset: failed to hash password: %w", err)
 	}
@@ -155,7 +206,7 @@ func (h *Handler) HandlePasswordResetConfirm(
 		return fmt.Errorf("password/reset: failed to commit transaction: %w", err)
 	}
 
-	if err := h.Sender.Send(ctx, sender.Message{
+	if err := h.sender.Send(ctx, sender.Message{
 		Email:   user.Email,
 		Payload: PasswordResetSuccessMessagePayload{},
 	}); err != nil {

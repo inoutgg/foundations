@@ -12,10 +12,9 @@ import (
 )
 
 var _ driver.Driver = (*pgxDriver)(nil)
-var _ driver.ExecutorTx = (*ExecutorTx)(nil)
+var _ driver.ExecutorTx = (*executorTx)(nil)
 
-// driver is a pgx/v5 database driver for use with the authentication package.
-
+// pgxDriver is a pgx/v5 database driver for use with the authentication package.
 type pgxDriver struct {
 	pool    *pgxpool.Pool
 	logger  *slog.Logger
@@ -36,24 +35,24 @@ func New(logger *slog.Logger, pool *pgxpool.Pool) *pgxDriver {
 
 func (d *pgxDriver) Queries() *query.Queries { return d.queries }
 
-type ExecutorTx struct {
-	queries *query.Queries
-	tx      pgx.Tx
-}
-
-func (t *ExecutorTx) Tx() pgx.Tx                         { return t.tx }
-func (t *ExecutorTx) Queries() *query.Queries            { return t.queries }
-func (t *ExecutorTx) Commit(ctx context.Context) error   { return t.tx.Commit(ctx) }
-func (t *ExecutorTx) Rollback(ctx context.Context) error { return t.tx.Rollback(ctx) }
-
 func (d *pgxDriver) Begin(ctx context.Context) (driver.ExecutorTx, error) {
 	tx, err := d.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("authentication/db: failed to begin transaction: %w", err)
 	}
 
-	return &ExecutorTx{
+	return &executorTx{
 		queries: d.queries.WithTx(tx),
 		tx:      tx,
 	}, nil
 }
+
+type executorTx struct {
+	queries *query.Queries
+	tx      pgx.Tx
+}
+
+func (e *executorTx) Tx() pgx.Tx                         { return e.tx }
+func (e *executorTx) Queries() *query.Queries            { return e.queries }
+func (e *executorTx) Commit(ctx context.Context) error   { return e.tx.Commit(ctx) }
+func (e *executorTx) Rollback(ctx context.Context) error { return e.tx.Rollback(ctx) }

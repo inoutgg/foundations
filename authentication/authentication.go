@@ -10,7 +10,7 @@ import (
 
 type Config struct {
 	SSOProviders     []sso.Provider[any]
-	EmailAndPassword password.EmailAndPasswordProvider
+	EmailAndPassword password.Handler
 }
 
 // WithSSOProviders adds the given SSO providers to the authentication handler.
