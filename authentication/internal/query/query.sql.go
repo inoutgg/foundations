@@ -29,19 +29,25 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 }
 
 const createUserSession = `-- name: CreateUserSession :one
-INSERT INTO user_sessions (id, user_id, expires_at)
-VALUES ($1::UUID, $2::UUID, $3)
+INSERT INTO user_sessions (id, user_id, token, expires_at)
+VALUES ($1::UUID, $2::UUID, $3, $4)
 RETURNING id
 `
 
 type CreateUserSessionParams struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
+	Token     string
 	ExpiresAt pgtype.Timestamp
 }
 
 func (q *Queries) CreateUserSession(ctx context.Context, arg CreateUserSessionParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, createUserSession, arg.ID, arg.UserID, arg.ExpiresAt)
+	row := q.db.QueryRow(ctx, createUserSession,
+		arg.ID,
+		arg.UserID,
+		arg.Token,
+		arg.ExpiresAt,
+	)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -171,7 +177,7 @@ func (q *Queries) FindUserBySSOProvider(ctx context.Context, arg FindUserBySSOPr
 }
 
 const findUserSessionByID = `-- name: FindUserSessionByID :one
-SELECT id, created_at, updated_at, expires_at, user_id
+SELECT id, created_at, updated_at, expires_at, token, user_id
 FROM user_sessions
 WHERE id = $1::UUID AND expires_at < NOW()
 LIMIT 1
@@ -185,6 +191,7 @@ func (q *Queries) FindUserSessionByID(ctx context.Context, id uuid.UUID) (UserSe
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExpiresAt,
+		&i.Token,
 		&i.UserID,
 	)
 	return i, err

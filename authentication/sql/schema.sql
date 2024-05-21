@@ -4,7 +4,9 @@ CREATE TABLE users (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   email VARCHAR(255) NOT NULL,
   is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
-  password_hash BYTEA(4095) NULL,
+  password_hash VARCHAR(4095) NULL,
+  first_name VARCHAR(255) NULL,
+  last_name VARCHAR(255) NULL,
   PRIMARY KEY (id),
   UNIQUE (email)
 );
@@ -31,8 +33,8 @@ CREATE TABLE sso_provider_users (
   user_id UUID NOT NULL,
   provider_user_id VARCHAR(255) NOT NULL, -- external user id
   PRIMARY KEY (user_id, id),
-  UNIQUE (name, user_id),
-  UNIQUE (name, provider_user_id),
+  UNIQUE (provider_name, user_id),
+  UNIQUE (provider_name, provider_user_id),
   FOREIGN KEY (user_id) REFERENCES users (id)
 );
 

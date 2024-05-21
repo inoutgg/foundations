@@ -43,8 +43,8 @@ SELECT *
 FROM token;
 
 -- name: CreateUserSession :one
-INSERT INTO user_sessions (id, user_id, expires_at)
-VALUES (@id::UUID, @user_id::UUID, @expires_at)
+INSERT INTO user_sessions (id, user_id, token, expires_at)
+VALUES (@id::UUID, @user_id::UUID, @token, @expires_at)
 RETURNING id;
 
 -- name: FindUserSessionByID :one

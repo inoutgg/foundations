@@ -29,6 +29,13 @@ var (
 type Config struct {
 	Logger         *slog.Logger
 	PasswordHasher PasswordHasher
+	Hijacker       Hijacker
+}
+
+// TODO: implement
+type Hijacker interface {
+	HijackUserRegisteration(ctx context.Context, tx pgx.Tx) error
+	HijackUserLogin(ctx context.Context) error
 }
 
 // NewConfig creates a new config.
@@ -51,7 +58,7 @@ func NewConfig(config ...func(*Config)) *Config {
 // WithPasswordHasher configures the password hasher.
 //
 // When setting a password hasher make sure to set it across all modules,
-// such as user registrration, password reset and password verification.
+// such as user registration, password reset and password verification.
 func WithPasswordHasher(hasher PasswordHasher) func(*Config) {
 	return func(cfg *Config) { cfg.PasswordHasher = hasher }
 }
@@ -96,6 +103,16 @@ func (h *Handler) HandleUserRegistration(
 		return uid, err
 	}
 
+	// An entry point for hijacking the user registration process.
+	if h.config.Hijacker != nil {
+		if err := h.config.Hijacker.HijackUserRegisteration(ctx, tx.Tx()); err != nil {
+			return uid, fmt.Errorf(
+				"authentication/password: failed to hijack user registration: %w",
+				err,
+			)
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return uid, fmt.Errorf("authentication/password: failed to register a user: %w", err)
 	}
@@ -125,7 +142,7 @@ func (h *Handler) handleUserRegistrationTx(
 	return uid, nil
 }
 
-func (p *Handler) HandleUserLoginRequest(
+func (p *Handler) HandleUserLogin(
 	ctx context.Context,
 	email, password string,
 ) (*strategy.User[any], error) {

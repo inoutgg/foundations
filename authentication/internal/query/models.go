@@ -51,5 +51,6 @@ type UserSession struct {
 	CreatedAt pgtype.Timestamp
 	UpdatedAt pgtype.Timestamp
 	ExpiresAt pgtype.Timestamp
+	Token     string
 	UserID    uuid.UUID
 }

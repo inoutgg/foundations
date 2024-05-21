@@ -32,10 +32,10 @@ func WithExpiresIn(expiresIn time.Duration) func(*Option) {
 }
 
 // WithHttpOnly sets the HttpOnly flag on the cookie.
-func WithHttpOnly() func(*Option) { return func(opt *Option) { opt.HttpOnly = true } }
+func WithHttpOnly(opt *Option) { opt.HttpOnly = true }
 
 // WithSecure sets the Secure flag on the cookie.
-func WithSecure() func(*Option) { return func(opt *Option) { opt.Secure = true } }
+func WithSecure(opt *Option) { opt.Secure = true }
 
 // WithSameSite sets the SameSite flag on the cookie.
 func WithSameSite(sameSite http.SameSite) func(*Option) {

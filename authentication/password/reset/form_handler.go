@@ -3,7 +3,6 @@ package passwordreset
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 
 	"github.com/go-playground/mold/v4"
@@ -44,7 +43,6 @@ func NewFormConfig(
 	config ...func(*FormConfig),
 ) *FormConfig {
 	cfg := &FormConfig{
-		Config: NewConfig(),
 
 		EmailFieldName:      FieldNameEmail,
 		ResetTokenFieldName: FieldNameResetToken,
@@ -56,6 +54,10 @@ func NewFormConfig(
 	}
 
 	// Set defaults.
+	if cfg.Config == nil {
+		cfg.Config = NewConfig()
+	}
+
 	if cfg.Validator == nil {
 		cfg.Validator = password.DefaultFormValidate
 	}
@@ -89,7 +91,6 @@ type confirmForm struct {
 
 // NewFormHandler creates a new FormHandler with the given configuration.
 func NewFormHandler(
-	logger *slog.Logger,
 	driver driver.Driver,
 	sender sender.Sender,
 	config *FormConfig,

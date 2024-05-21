@@ -1,3 +1,5 @@
+// Package csrf implements a CSRF protection middleware based on the double
+// submit cookie pattern.
 package csrf
 
 import (
@@ -52,10 +54,10 @@ func Middleware(config ...func(*MiddlewareConfig)) middleware.MiddlewareFunc {
 				return
 			}
 
-			nr := r.WithContext(context.WithValue(r.Context(), kCtxKey, tok))
+			newCtx := context.WithValue(r.Context(), kCtxKey, tok)
 
 			if slices.Contains(cfg.IgnoredMethods, r.Method) {
-				next.ServeHTTP(w, nr)
+				next.ServeHTTP(w, r.WithContext(newCtx))
 				return
 			}
 
@@ -66,7 +68,7 @@ func Middleware(config ...func(*MiddlewareConfig)) middleware.MiddlewareFunc {
 				return
 			}
 
-			next.ServeHTTP(w, nr)
+			next.ServeHTTP(w, r.WithContext(newCtx))
 		})
 	}
 }

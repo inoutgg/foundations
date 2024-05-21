@@ -1,6 +1,9 @@
 package error
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Check HttpError compliance to error.
 var _ error = (*HttpError)(nil)
@@ -22,6 +25,31 @@ func FromError(err error, code int, message ...string) HttpError {
 	return New(strings.Join(message, " "), code, err)
 }
 
-func (e HttpError) Unwrap() []error { return e.errors }
 func (e HttpError) Error() string   { return e.message }
+func (e HttpError) Unwrap() []error { return e.errors }
 func (e HttpError) StatusCode() int { return e.code }
+
+func FormatError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	messages := []string{err.Error()}
+
+	if u, ok := err.(interface {
+		Unwrap() error
+	}); ok {
+		childError := u.Unwrap()
+		if childError != nil {
+			messages = append(messages, fmt.Sprintf("child error: %s", childError.Error()))
+		}
+	} else if u, ok := err.(interface {
+		Unwrap() []error
+	}); ok {
+		for _, childError := range u.Unwrap() {
+			messages = append(messages, fmt.Sprintf("child error: %s", childError.Error()))
+		}
+	}
+
+	return strings.Join(messages, "\n")
+}

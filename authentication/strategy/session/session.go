@@ -4,13 +4,17 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.inout.gg/common/authentication/db/driver"
 	"go.inout.gg/common/authentication/internal/query"
 	"go.inout.gg/common/authentication/strategy"
 	"go.inout.gg/common/authentication/user"
 	"go.inout.gg/common/http/cookie"
+	"go.inout.gg/common/must"
+	"go.inout.gg/common/random"
 	"go.inout.gg/common/sql/dbutil"
 	"go.inout.gg/common/uuidv7"
 )
@@ -18,7 +22,7 @@ import (
 var _ strategy.Authenticator[any] = (*session[any])(nil)
 
 var (
-	CookieName = "usid"
+	DefaultCookieName = "usid"
 )
 
 type session[T any] struct {
@@ -28,6 +32,7 @@ type session[T any] struct {
 
 type Config struct {
 	CookieName string
+	ExpiresIn  time.Duration
 }
 
 // New creates a new session authenticator.
@@ -43,14 +48,22 @@ func (s *session[T]) Issue(w http.ResponseWriter, r *http.Request) error {
 	q := s.driver.Queries()
 
 	sessionID := uuidv7.Must()
-	sess, err := q.CreateUserSession(ctx, query.CreateUserSessionParams{
-		ID: sessionID,
-	})
-	if err != nil {
+	token := must.Must(random.SecureHexString(64))
+	if _, err := q.CreateUserSession(ctx, query.CreateUserSessionParams{
+		ID:        sessionID,
+		Token:     token,
+		ExpiresAt: pgtype.Timestamp{Time: time.Now().Add(s.config.ExpiresIn), Valid: true},
+	}); err != nil {
 		return fmt.Errorf("authentication/session: failed to create session: %w", err)
 	}
 
-	cookie.Set(w, s.config.CookieName, sess.String())
+	cookie.Set(
+		w,
+		s.config.CookieName,
+		must.Must(s.encode(token)),
+		cookie.WithHttpOnly,
+		cookie.WithExpiresIn(s.config.ExpiresIn),
+	)
 
 	return nil
 }
@@ -60,12 +73,12 @@ func (s *session[T]) Authenticate(
 	r *http.Request,
 ) (*strategy.User[T], error) {
 	ctx := r.Context()
-	val := cookie.Get(r, CookieName)
+	val := cookie.Get(r, DefaultCookieName)
 	if val == "" {
 		return nil, user.ErrUnauthorizedUser
 	}
 
-	val, err := s.decodeSession(val)
+	val, err := s.decode(val)
 	if err != nil {
 		return nil, fmt.Errorf("authentication/session: failed to decode session: %w", err)
 	}
@@ -93,7 +106,12 @@ func (s *session[T]) Authenticate(
 	return nil, nil
 }
 
-func (s *session[T]) decodeSession(val string) (string, error) {
+func (s *session[T]) encode(val string) (string, error) {
+	bytes := []byte(val)
+	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+func (s *session[T]) decode(val string) (string, error) {
 	bytes, err := base64.URLEncoding.DecodeString(val)
 	if err != nil {
 		return "", fmt.Errorf("authentication/session: failed to decode cookie: %w", err)
