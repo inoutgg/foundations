@@ -2,11 +2,13 @@ package passwordreset
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.inout.gg/common/authentication"
 	"go.inout.gg/common/authentication/db/driver"
 	"go.inout.gg/common/authentication/internal/query"
 	"go.inout.gg/common/authentication/password"
@@ -19,11 +21,8 @@ import (
 )
 
 var (
-	// ErrAuthorizedUser is returned when an authorized user tries to access the password reset form.
-	ErrAuthorizedUser = fmt.Errorf("password/reset: authorized user access")
-
 	// ErrUsedPasswordResetToken is returned when the password reset token has already been used.
-	ErrUsedPasswordResetToken = fmt.Errorf("password/reset: used password reset token")
+	ErrUsedPasswordResetToken = errors.New("password/reset: used password reset token")
 )
 
 const (
@@ -99,15 +98,15 @@ type Handler struct {
 	sender sender.Sender
 }
 
-// HandlePasswordResetRequest handles a password reset request.
-func (h *Handler) HandlePasswordResetRequest(
+// HandlePasswordReset handles a password reset request.
+func (h *Handler) HandlePasswordReset(
 	ctx context.Context,
 	email string,
 ) error {
 	// Forbid authorized user access.
 	usr := user.FromContext[any](ctx)
 	if usr != nil {
-		return ErrAuthorizedUser
+		return authentication.ErrAuthorizedUser
 	}
 
 	tx, err := h.driver.Begin(ctx)

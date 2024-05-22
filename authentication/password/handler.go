@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"go.inout.gg/common/authentication"
 	"go.inout.gg/common/authentication/db/driver"
 	"go.inout.gg/common/authentication/internal/query"
 	"go.inout.gg/common/authentication/password/verification"
@@ -19,9 +20,7 @@ import (
 )
 
 var (
-	ErrAuthorizedUser    = fmt.Errorf("authentication/password: authorized user access")
 	ErrEmailAlreadyTaken = fmt.Errorf("authentication/password: email already taken")
-	ErrUserNotFound      = fmt.Errorf("authentication/password: user not found")
 	ErrPasswordIncorrect = fmt.Errorf("authentication/password: password incorrect")
 )
 
@@ -82,7 +81,7 @@ func (h *Handler) HandleUserRegistration(
 	// Forbid authorized user access.
 	usr := user.FromContext[any](ctx)
 	if usr != nil {
-		return uid, ErrAuthorizedUser
+		return uid, authentication.ErrAuthorizedUser
 	}
 
 	// Make sure that the password hashing is performed outside of the transaction
@@ -149,7 +148,7 @@ func (p *Handler) HandleUserLogin(
 	// Forbid authorized user access.
 	usr := user.FromContext[any](ctx)
 	if usr != nil {
-		return nil, ErrAuthorizedUser
+		return nil, authentication.ErrAuthorizedUser
 	}
 
 	q := p.driver.Queries()
@@ -157,7 +156,7 @@ func (p *Handler) HandleUserLogin(
 	user, err := q.FindUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
+			return nil, authentication.ErrUserNotFound
 		}
 
 		return nil, fmt.Errorf("authentication/password: failed to find user: %w", err)
@@ -165,7 +164,7 @@ func (p *Handler) HandleUserLogin(
 
 	passwordHash := pointer.ToValue(user.PasswordHash, "")
 	if passwordHash == "" {
-		return nil, ErrUserNotFound
+		return nil, authentication.ErrUserNotFound
 	}
 
 	ok, err := p.config.PasswordHasher.Verify(passwordHash, password)

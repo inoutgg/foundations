@@ -9,6 +9,7 @@ import (
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/mold/v4/scrubbers"
 	"github.com/go-playground/validator/v10"
+	"go.inout.gg/common/authentication"
 	"go.inout.gg/common/authentication/db/driver"
 	httperror "go.inout.gg/common/http/error"
 )
@@ -139,7 +140,7 @@ func (h *FormHandler) HandleUserRegistration(w http.ResponseWriter, r *http.Requ
 
 	_, err = h.handler.HandleUserRegistration(r.Context(), form.Email, form.Password)
 	if err != nil {
-		if errors.Is(err, ErrAuthorizedUser) {
+		if errors.Is(err, authentication.ErrAuthorizedUser) {
 			return httperror.FromError(err, http.StatusForbidden)
 		}
 
@@ -181,7 +182,7 @@ func (h *FormHandler) HandleUserLogin(w http.ResponseWriter, r *http.Request) er
 
 	_, err = h.handler.HandleUserLogin(r.Context(), form.Email, form.Password)
 	if err != nil {
-		if errors.Is(err, ErrAuthorizedUser) {
+		if errors.Is(err, authentication.ErrAuthorizedUser) {
 			return httperror.FromError(err, http.StatusForbidden)
 		}
 

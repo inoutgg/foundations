@@ -1,11 +1,13 @@
 package session
 
 import (
+	"net/http"
+
+	"go.inout.gg/common/authentication"
 	"go.inout.gg/common/authentication/db/driver"
 	"go.inout.gg/common/authentication/user"
 	"go.inout.gg/common/http/cookie"
 	httperror "go.inout.gg/common/http/error"
-	"net/http"
 )
 
 // LogoutHandler is a handler that logs out the user and deletes the session.
@@ -24,7 +26,7 @@ func (h *LogoutHandler) HandleLogout(w http.ResponseWriter, r *http.Request) err
 
 	usr := user.FromRequest[any](r)
 	if usr == nil {
-		return httperror.FromError(user.ErrUnauthorizedUser, http.StatusUnauthorized)
+		return httperror.FromError(authentication.ErrUnauthorizedUser, http.StatusUnauthorized)
 	}
 
 	if _, err := q.ExpireSessionByID(ctx, usr.ID); err != nil {

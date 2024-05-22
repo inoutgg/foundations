@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.inout.gg/common/authentication"
 	"go.inout.gg/common/authentication/db/driver"
 	"go.inout.gg/common/authentication/internal/query"
 	"go.inout.gg/common/authentication/strategy"
-	"go.inout.gg/common/authentication/user"
 	"go.inout.gg/common/http/cookie"
 	"go.inout.gg/common/must"
 	"go.inout.gg/common/random"
@@ -75,7 +75,7 @@ func (s *session[T]) Authenticate(
 	ctx := r.Context()
 	val := cookie.Get(r, DefaultCookieName)
 	if val == "" {
-		return nil, user.ErrUnauthorizedUser
+		return nil, authentication.ErrUnauthorizedUser
 	}
 
 	val, err := s.decode(val)
@@ -93,7 +93,7 @@ func (s *session[T]) Authenticate(
 	_, err = q.FindUserSessionByID(ctx, uuid.UUID{})
 	if err != nil {
 		if dbutil.IsNotFoundError(err) {
-			return nil, user.ErrUnauthorizedUser
+			return nil, authentication.ErrUnauthorizedUser
 		}
 
 		return nil, fmt.Errorf("authentication/session: failed to find user session: %w", err)

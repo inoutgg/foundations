@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-playground/mold/v4"
 	"github.com/go-playground/validator/v10"
+	"go.inout.gg/common/authentication"
 	"go.inout.gg/common/authentication/db/driver"
 	"go.inout.gg/common/authentication/password"
 	"go.inout.gg/common/authentication/sender"
@@ -128,16 +129,16 @@ func (h *FormHandler) parsePasswordResetRequestForm(
 	return form, nil
 }
 
-// HandlePasswordResetRequest handles a password reset request.
-func (h *FormHandler) HandlePasswordResetRequest(req *http.Request) error {
+// HandlePasswordReset handles a password reset request.
+func (h *FormHandler) HandlePasswordReset(req *http.Request) error {
 	ctx := req.Context()
 	form, err := h.parsePasswordResetRequestForm(req)
 	if err != nil {
 		return httperror.FromError(err, http.StatusBadRequest)
 	}
 
-	if err := h.handler.HandlePasswordResetRequest(ctx, form.Email); err != nil {
-		if errors.Is(err, ErrAuthorizedUser) {
+	if err := h.handler.HandlePasswordReset(ctx, form.Email); err != nil {
+		if errors.Is(err, authentication.ErrAuthorizedUser) {
 			return httperror.FromError(err, http.StatusForbidden)
 		}
 		return httperror.FromError(err, http.StatusInternalServerError)
@@ -181,7 +182,7 @@ func (h *FormHandler) HandlePasswordResetConfirm(req *http.Request) error {
 
 	if err := h.handler.HandlePasswordResetConfirm(ctx, form.Password, form.ResetToken); err != nil {
 		// Don't allow to change password for logged in users.
-		if errors.Is(err, ErrAuthorizedUser) {
+		if errors.Is(err, authentication.ErrAuthorizedUser) {
 			return httperror.FromError(err, http.StatusForbidden)
 		} else if errors.Is(err, ErrUsedPasswordResetToken) {
 			return httperror.FromError(err, http.StatusBadRequest)

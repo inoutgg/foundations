@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"log/slog"
@@ -10,10 +9,6 @@ import (
 	"go.inout.gg/common/authentication/strategy"
 	httperror "go.inout.gg/common/http/error"
 	"go.inout.gg/common/http/errorhandler"
-)
-
-var (
-	ErrUnauthorizedUser = errors.New("authentication/user: unauthorized user access")
 )
 
 type ctxKey struct{}
