@@ -26,9 +26,7 @@ type MiddlewareConfig struct {
 
 // WithTokenOption sets the TokenOption on the middleware config.
 func WithTokenOption(opt *TokenOption) func(*MiddlewareConfig) {
-	return func(cfg *MiddlewareConfig) {
-		cfg.TokenOption = opt
-	}
+	return func(cfg *MiddlewareConfig) { cfg.TokenOption = opt }
 }
 
 // Middleware returns a middleware that adds CSRF token to the request context.
