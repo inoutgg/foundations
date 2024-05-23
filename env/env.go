@@ -4,8 +4,9 @@ package env
 import (
 	"fmt"
 
-	"github.com/caarlos0/env/v10"
+	"github.com/caarlos0/env/v11"
 	dotenv "github.com/joho/godotenv"
+	"go.inout.gg/common/must"
 )
 
 // Load loads the environment configuration into a struct T.
@@ -27,4 +28,9 @@ func Load[T any](paths ...string) (*T, error) {
 	}
 
 	return &config, nil
+}
+
+// MustLoad is like Load, but panics if an error occurs.
+func MustLoad[T any](paths ...string) *T {
+	return must.Must(Load[T](paths...))
 }

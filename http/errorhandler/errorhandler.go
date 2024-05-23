@@ -47,9 +47,6 @@ func WithErrorHandler(errorHandler ErrorHandler) func(HandlerFunc) http.HandlerF
 
 // DefaultErrorHandler is the default error handler.
 var DefaultErrorHandler = ErrorHandlerFunc(func(w http.ResponseWriter, r *http.Request, err error) {
-	message := httperror.FormatError(err)
-	println(message)
-
 	if err, ok := err.(httperror.HttpError); ok {
 		http.Error(w, err.Error(), err.StatusCode())
 		return

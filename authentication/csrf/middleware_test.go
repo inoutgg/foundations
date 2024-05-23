@@ -4,15 +4,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"go.inout.gg/common/must"
 )
 
 var checksumSecret = "really-long-and-super-protected-checksum-secret"
-var defaultTokenOption = NewTokenOption(func(opt *TokenOption) {
-	opt.ChecksumSecret = checksumSecret
-	opt.TokenLength = 32
-	opt.CookieSecure = true
-	opt.CookieSameSite = http.SameSiteLaxMode
-})
+
 var safeMethods = []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace}
 var unsafeMethods = []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
 var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -27,9 +24,7 @@ var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 
 func TestMethods(t *testing.T) {
 	mux := http.NewServeMux()
-	middleware := Middleware(func(m *MiddlewareConfig) {
-		m.TokenOption = defaultTokenOption
-	})
+	middleware := must.Must(Middleware(WithChecksumSecret(checksumSecret)))
 	route := middleware(mux)
 
 	mux.Handle("/", testHandler)
@@ -53,8 +48,8 @@ func TestMethods(t *testing.T) {
 			t.Fatalf("expected cookie to be http only")
 		}
 
-		if cookie.Name != defaultTokenOption.cookieName() {
-			t.Fatalf("expected cookie %s to be set", defaultTokenOption.cookieName())
+		if cookie.Name != DefaultCookieName {
+			t.Fatalf("expected cookie %s to be set", DefaultCookieName)
 		}
 	}
 
@@ -74,9 +69,7 @@ func TestMethods(t *testing.T) {
 
 func TestSuccessCase(t *testing.T) {
 	mux := http.NewServeMux()
-	middleware := Middleware(func(m *MiddlewareConfig) {
-		m.TokenOption = defaultTokenOption
-	})
+	middleware := must.Must(Middleware(WithChecksumSecret(checksumSecret)))
 	route := middleware(mux)
 	var tok *Token
 	var err error
@@ -109,9 +102,7 @@ func TestSuccessCase(t *testing.T) {
 
 func TestMismatchingTokensFailureCase(t *testing.T) {
 	mux := http.NewServeMux()
-	middleware := Middleware(func(m *MiddlewareConfig) {
-		m.TokenOption = defaultTokenOption
-	})
+	middleware := must.Must(Middleware(WithChecksumSecret(checksumSecret)))
 	route := middleware(mux)
 	var tok *Token
 	var err error

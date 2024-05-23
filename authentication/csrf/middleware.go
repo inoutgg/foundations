@@ -17,36 +17,78 @@ type ctxKey struct{}
 
 var kCtxKey = ctxKey{}
 
-// MiddlewareConfig is the configuration for the CSRF middleware.
-type MiddlewareConfig struct {
-	TokenOption    *TokenOption
+var (
+	ErrNoChecksumSecret = errors.New("authentication/csrf: checksum secret is not provided")
+)
+
+var (
+	DefaultFieldName  = "csrf_token"
+	DefaultHeaderName = "X-CSRF-Token"
+	DefaultCookieName = "csrf_token"
+)
+
+var (
+	DefaultTokenLength = 64
+)
+
+// Config is the configuration for the CSRF middleware.
+type Config struct {
 	IgnoredMethods []string                  // optional (default: [GET, HEAD, OPTIONS, TRACE])
 	ErrorHandler   errorhandler.ErrorHandler // optional (default: errorhandler.DefaultErrorHandler)
+
+	ChecksumSecret string
+	TokenLength    int // optional (default: 64)
+
+	HeaderName     string        // optional (default: "X-CSRF-Token")
+	FieldName      string        // optional (default: "csrf_token")
+	CookieName     string        // optional (default: "csrf_token")
+	CookieSameSite http.SameSite // optional (default: http.SameSiteLaxMode)
+	CookieSecure   bool
 }
 
-// WithTokenOption sets the TokenOption on the middleware config.
-func WithTokenOption(opt *TokenOption) func(*MiddlewareConfig) {
-	return func(cfg *MiddlewareConfig) { cfg.TokenOption = opt }
+// WithChecksumSecret sets the checksum secret on the token option.
+func WithChecksumSecret(secret string) func(*Config) {
+	return func(config *Config) { config.ChecksumSecret = secret }
 }
 
 // Middleware returns a middleware that adds CSRF token to the request context.
-func Middleware(config ...func(*MiddlewareConfig)) middleware.MiddlewareFunc {
-	cfg := MiddlewareConfig{
+func Middleware(config ...func(*Config)) (middleware.MiddlewareFunc, error) {
+	cfg := Config{
 		IgnoredMethods: []string{
 			http.MethodGet,
 			http.MethodHead,
 			http.MethodOptions,
 			http.MethodTrace,
 		},
-		ErrorHandler: errorhandler.DefaultErrorHandler,
+		HeaderName:     DefaultHeaderName,
+		FieldName:      DefaultFieldName,
+		CookieName:     DefaultCookieName,
+		TokenLength:    DefaultTokenLength,
+		CookieSameSite: http.SameSiteLaxMode,
 	}
 	for _, f := range config {
 		f(&cfg)
 	}
 
+	if cfg.ErrorHandler == nil {
+		cfg.ErrorHandler = errorhandler.DefaultErrorHandler
+	}
+
+	if cfg.ChecksumSecret == "" {
+		return nil, ErrNoChecksumSecret
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			tok, err := newToken(cfg.TokenOption)
+			tokConfig := &tokenConfig{
+				ChecksumSecret: cfg.ChecksumSecret,
+				TokenLength:    cfg.TokenLength,
+				HeaderName:     cfg.HeaderName,
+				FieldName:      cfg.FieldName,
+				CookieName:     cfg.CookieName,
+				CookieSameSite: cfg.CookieSameSite,
+			}
+			tok, err := newToken(tokConfig)
 			if err != nil {
 				cfg.ErrorHandler.ServeHTTP(w, r, err)
 				return
@@ -59,7 +101,7 @@ func Middleware(config ...func(*MiddlewareConfig)) middleware.MiddlewareFunc {
 				return
 			}
 
-			err = validateRequest(r, cfg.TokenOption)
+			err = validateRequest(r, tokConfig)
 			if err != nil {
 				err := httperror.FromError(err, http.StatusForbidden, "invalid CSRF token")
 				cfg.ErrorHandler.ServeHTTP(w, r, err)
@@ -68,7 +110,7 @@ func Middleware(config ...func(*MiddlewareConfig)) middleware.MiddlewareFunc {
 
 			next.ServeHTTP(w, r.WithContext(newCtx))
 		})
-	}
+	}, nil
 }
 
 // FromRequest returns the CSRF token associated with the given HTTP request.

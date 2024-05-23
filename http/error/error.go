@@ -29,6 +29,7 @@ func (e HttpError) Error() string   { return e.message }
 func (e HttpError) Unwrap() []error { return e.errors }
 func (e HttpError) StatusCode() int { return e.code }
 
+// TODO: move it to some other module.
 func FormatError(err error) string {
 	if err == nil {
 		return ""
@@ -41,13 +42,13 @@ func FormatError(err error) string {
 	}); ok {
 		childError := u.Unwrap()
 		if childError != nil {
-			messages = append(messages, fmt.Sprintf("child error: %s", childError.Error()))
+			messages = append(messages, fmt.Sprintf("  * child error: %s", childError.Error()))
 		}
 	} else if u, ok := err.(interface {
 		Unwrap() []error
 	}); ok {
 		for _, childError := range u.Unwrap() {
-			messages = append(messages, fmt.Sprintf("child error: %s", childError.Error()))
+			messages = append(messages, fmt.Sprintf("  * child error: %s", childError.Error()))
 		}
 	}
 

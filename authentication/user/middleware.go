@@ -15,8 +15,8 @@ type ctxKey struct{}
 
 var kCtxKey = ctxKey{}
 
-// MiddlewareConfig is the configuration for the middleware.
-type MiddlewareConfig struct {
+// Config is the configuration for the middleware.
+type Config struct {
 	Logger *slog.Logger
 
 	// ErrorHandler is the error handler that is called when the user is not
@@ -35,7 +35,7 @@ type MiddlewareConfig struct {
 // If the user is not authenticated, the error handler is called.
 func Middleware[T any](
 	authenticator strategy.Authenticator[T],
-	config *MiddlewareConfig,
+	config *Config,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		eh := config.ErrorHandler
