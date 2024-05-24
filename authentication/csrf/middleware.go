@@ -46,13 +46,8 @@ type Config struct {
 	CookieSecure   bool
 }
 
-// WithChecksumSecret sets the checksum secret on the token option.
-func WithChecksumSecret(secret string) func(*Config) {
-	return func(config *Config) { config.ChecksumSecret = secret }
-}
-
 // Middleware returns a middleware that adds CSRF token to the request context.
-func Middleware(config ...func(*Config)) (middleware.MiddlewareFunc, error) {
+func Middleware(secret string, config ...func(*Config)) (middleware.MiddlewareFunc, error) {
 	cfg := Config{
 		IgnoredMethods: []string{
 			http.MethodGet,
@@ -74,14 +69,10 @@ func Middleware(config ...func(*Config)) (middleware.MiddlewareFunc, error) {
 		cfg.ErrorHandler = errorhandler.DefaultErrorHandler
 	}
 
-	if cfg.ChecksumSecret == "" {
-		return nil, ErrNoChecksumSecret
-	}
-
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tokConfig := &tokenConfig{
-				ChecksumSecret: cfg.ChecksumSecret,
+				ChecksumSecret: secret,
 				TokenLength:    cfg.TokenLength,
 				HeaderName:     cfg.HeaderName,
 				FieldName:      cfg.FieldName,

@@ -11,6 +11,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"go.inout.gg/common/authentication"
 	"go.inout.gg/common/authentication/db/driver"
+	"go.inout.gg/common/authentication/strategy"
 	httperror "go.inout.gg/common/http/error"
 )
 
@@ -20,15 +21,15 @@ var (
 	DefaultFormModifier = modifiers.New()
 )
 
-var (
-	FieldNameFirstName = "first_name"
-	FieldNameLastName  = "last_name"
-	FieldNameEmail     = "email"
-	FieldNamePassword  = "password"
+const (
+	DefaultFieldNameFirstName = "first_name"
+	DefaultFieldNameLastName  = "last_name"
+	DefaultFieldNameEmail     = "email"
+	DefaultFieldNamePassword  = "password"
 )
 
-type FormConfig struct {
-	*Config
+type FormConfig[T any] struct {
+	*Config[T]
 
 	Validator    *validator.Validate
 	FormScrubber *mold.Transformer
@@ -40,11 +41,13 @@ type FormConfig struct {
 	PasswordFieldName  string
 }
 
-// NewFormConfig creates a new FormConfig with the given configuration options.
-func NewFormConfig(config ...func(*FormConfig)) *FormConfig {
-	cfg := &FormConfig{
-		EmailFieldName:    FieldNameEmail,
-		PasswordFieldName: FieldNamePassword,
+// NewFormConfig[T] creates a new FormConfig[T] with the given configuration options.
+func NewFormConfig[T any](config ...func(*FormConfig[T])) *FormConfig[T] {
+	cfg := &FormConfig[T]{
+		FirstNameFieldName: DefaultFieldNameFirstName,
+		LastNameFieldName:  DefaultFieldNameLastName,
+		EmailFieldName:     DefaultFieldNameEmail,
+		PasswordFieldName:  DefaultFieldNamePassword,
 	}
 
 	for _, f := range config {
@@ -53,7 +56,7 @@ func NewFormConfig(config ...func(*FormConfig)) *FormConfig {
 
 	// Set defaults.
 	if cfg.Config == nil {
-		cfg.Config = NewConfig()
+		cfg.Config = NewConfig[T]()
 	}
 
 	if cfg.Validator == nil {
@@ -71,20 +74,20 @@ func NewFormConfig(config ...func(*FormConfig)) *FormConfig {
 	return cfg
 }
 
-func WithConfig(config *Config) func(*FormConfig) {
-	return func(cfg *FormConfig) { cfg.Config = config }
+func WithConfig[T any](config *Config[T]) func(*FormConfig[T]) {
+	return func(cfg *FormConfig[T]) { cfg.Config = config }
 }
 
-// FormHandler is a wrapper around Handler handling HTTP form requests.
-type FormHandler struct {
-	config  *FormConfig
-	handler *Handler
+// FormHandler[T] is a wrapper around Handler handling HTTP form requests.
+type FormHandler[T any] struct {
+	config  *FormConfig[T]
+	handler *Handler[T]
 }
 
-// NewFormHandler creates a new FormHandler with the given configuration.
-func NewFormHandler(driver driver.Driver, config *FormConfig) *FormHandler {
-	return &FormHandler{
-		handler: &Handler{
+// NewFormHandler[T] creates a new FormHandler[T] with the given configuration.
+func NewFormHandler[T any](driver driver.Driver, config *FormConfig[T]) *FormHandler[T] {
+	return &FormHandler[T]{
+		handler: &Handler[T]{
 			config: config.Config,
 			driver: driver,
 		},
@@ -106,7 +109,9 @@ type userLoginForm struct {
 	Password string `mod:"trim" validate:"required"`
 }
 
-func (h *FormHandler) parseUserRegistrationForm(req *http.Request) (*userRegistrationForm, error) {
+func (h *FormHandler[T]) parseUserRegistrationForm(
+	req *http.Request,
+) (*userRegistrationForm, error) {
 	ctx := req.Context()
 
 	if err := req.ParseForm(); err != nil {
@@ -132,25 +137,28 @@ func (h *FormHandler) parseUserRegistrationForm(req *http.Request) (*userRegistr
 }
 
 // HandleUserRegistration handles a user registration request.
-func (h *FormHandler) HandleUserRegistration(w http.ResponseWriter, r *http.Request) error {
+func (h *FormHandler[T]) HandleUserRegistration(
+	w http.ResponseWriter,
+	r *http.Request,
+) (*strategy.User[T], error) {
 	form, err := h.parseUserRegistrationForm(r)
 	if err != nil {
-		return httperror.FromError(err, http.StatusBadRequest)
+		return nil, httperror.FromError(err, http.StatusBadRequest)
 	}
 
-	_, err = h.handler.HandleUserRegistration(r.Context(), form.Email, form.Password)
+	result, err := h.handler.HandleUserRegistration(r.Context(), form.Email, form.Password)
 	if err != nil {
 		if errors.Is(err, authentication.ErrAuthorizedUser) {
-			return httperror.FromError(err, http.StatusForbidden)
+			return nil, httperror.FromError(err, http.StatusForbidden)
 		}
 
-		return httperror.FromError(err, http.StatusInternalServerError)
+		return nil, httperror.FromError(err, http.StatusInternalServerError)
 	}
 
-	return nil
+	return result, nil
 }
 
-func (h *FormHandler) parseUserLoginForm(req *http.Request) (*userLoginForm, error) {
+func (h *FormHandler[T]) parseUserLoginForm(req *http.Request) (*userLoginForm, error) {
 	ctx := req.Context()
 
 	if err := req.ParseForm(); err != nil {
@@ -174,20 +182,23 @@ func (h *FormHandler) parseUserLoginForm(req *http.Request) (*userLoginForm, err
 }
 
 // HandleUserLogin handles a user login request.
-func (h *FormHandler) HandleUserLogin(w http.ResponseWriter, r *http.Request) error {
+func (h *FormHandler[T]) HandleUserLogin(
+	w http.ResponseWriter,
+	r *http.Request,
+) (*strategy.User[T], error) {
 	form, err := h.parseUserLoginForm(r)
 	if err != nil {
-		return httperror.FromError(err, http.StatusBadRequest)
+		return nil, httperror.FromError(err, http.StatusBadRequest)
 	}
 
-	_, err = h.handler.HandleUserLogin(r.Context(), form.Email, form.Password)
+	result, err := h.handler.HandleUserLogin(r.Context(), form.Email, form.Password)
 	if err != nil {
 		if errors.Is(err, authentication.ErrAuthorizedUser) {
-			return httperror.FromError(err, http.StatusForbidden)
+			return nil, httperror.FromError(err, http.StatusForbidden)
 		}
 
-		return httperror.FromError(err, http.StatusInternalServerError)
+		return nil, httperror.FromError(err, http.StatusInternalServerError)
 	}
 
-	return nil
+	return result, nil
 }

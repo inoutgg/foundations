@@ -24,7 +24,7 @@ var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 
 func TestMethods(t *testing.T) {
 	mux := http.NewServeMux()
-	middleware := must.Must(Middleware(WithChecksumSecret(checksumSecret)))
+	middleware := must.Must(Middleware(checksumSecret))
 	route := middleware(mux)
 
 	mux.Handle("/", testHandler)
@@ -69,7 +69,7 @@ func TestMethods(t *testing.T) {
 
 func TestSuccessCase(t *testing.T) {
 	mux := http.NewServeMux()
-	middleware := must.Must(Middleware(WithChecksumSecret(checksumSecret)))
+	middleware := must.Must(Middleware(checksumSecret))
 	route := middleware(mux)
 	var tok *Token
 	var err error
@@ -102,7 +102,7 @@ func TestSuccessCase(t *testing.T) {
 
 func TestMismatchingTokensFailureCase(t *testing.T) {
 	mux := http.NewServeMux()
-	middleware := must.Must(Middleware(WithChecksumSecret(checksumSecret)))
+	middleware := must.Must(Middleware(checksumSecret))
 	route := middleware(mux)
 	var tok *Token
 	var err error
