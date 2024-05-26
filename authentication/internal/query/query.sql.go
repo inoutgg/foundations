@@ -8,7 +8,6 @@ package query
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -18,7 +17,7 @@ VALUES ($1::UUID, $2, $3)
 `
 
 type CreateUserParams struct {
-	ID           uuid.UUID
+	ID           pgtype.UUID
 	Email        string
 	PasswordHash *string
 }
@@ -83,7 +82,7 @@ const findUserByID = `-- name: FindUserByID :one
 SELECT id, created_at, updated_at, email, is_email_verified, password_hash, first_name, last_name FROM users WHERE id = $1::UUID LIMIT 1
 `
 
-func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) {
+func (q *Queries) FindUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
 	row := q.db.QueryRow(ctx, findUserByID, id)
 	var i User
 	err := row.Scan(
@@ -126,8 +125,8 @@ RETURNING id
 `
 
 type LinkUserToSSOProviderParams struct {
-	ID             uuid.UUID
-	UserID         uuid.UUID
+	ID             pgtype.UUID
+	UserID         pgtype.UUID
 	ProviderName   string
 	ProviderUserID string
 }
@@ -175,7 +174,7 @@ WHERE id = $2
 
 type SetUserEmailByIDParams struct {
 	Email string
-	ID    uuid.UUID
+	ID    pgtype.UUID
 }
 
 func (q *Queries) SetUserEmailByID(ctx context.Context, arg SetUserEmailByIDParams) error {
@@ -191,7 +190,7 @@ WHERE id = $2
 
 type SetUserPasswordByIDParams struct {
 	PasswordHash *string
-	ID           uuid.UUID
+	ID           pgtype.UUID
 }
 
 func (q *Queries) SetUserPasswordByID(ctx context.Context, arg SetUserPasswordByIDParams) error {
@@ -214,15 +213,15 @@ FROM token
 `
 
 type UpsertEmailVerificationTokenParams struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
 	Token     string
 	ExpiresAt bool
 }
 
 type UpsertEmailVerificationTokenRow struct {
 	Token string
-	ID    uuid.UUID
+	ID    pgtype.UUID
 }
 
 func (q *Queries) UpsertEmailVerificationToken(ctx context.Context, arg UpsertEmailVerificationTokenParams) (UpsertEmailVerificationTokenRow, error) {
@@ -255,15 +254,15 @@ FROM token
 `
 
 type UpsertPasswordResetTokenParams struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
 	Token     string
 	ExpiresAt pgtype.Timestamp
 }
 
 type UpsertPasswordResetTokenRow struct {
 	Token     string
-	ID        uuid.UUID
+	ID        pgtype.UUID
 	ExpiresAt pgtype.Timestamp
 }
 

@@ -79,10 +79,8 @@ func (h *Handler[T]) HandleUserRegistration(
 	ctx context.Context,
 	email, password string,
 ) (*strategy.User[T], error) {
-
 	// Forbid authorized user access.
-	usr := user.FromContext[any](ctx)
-	if usr != nil {
+	if user.IsAuthorized(ctx) {
 		return nil, authentication.ErrAuthorizedUser
 	}
 
@@ -134,7 +132,7 @@ func (h *Handler[T]) handleUserRegistrationTx(
 	uid := uuidv7.Must()
 	q := tx.Queries()
 	if err := q.CreateUser(ctx, query.CreateUserParams{
-		ID:           uid,
+		ID:           uuidv7.ToPgxUUID(uid),
 		Email:        email,
 		PasswordHash: pointer.FromValue(passwordHash),
 	}); err != nil {
@@ -153,8 +151,7 @@ func (h *Handler[T]) HandleUserLogin(
 	email, password string,
 ) (*strategy.User[T], error) {
 	// Forbid authorized user access.
-	usr := user.FromContext[any](ctx)
-	if usr != nil {
+	if user.IsAuthorized(ctx) {
 		return nil, authentication.ErrAuthorizedUser
 	}
 
@@ -168,6 +165,8 @@ func (h *Handler[T]) HandleUserLogin(
 
 		return nil, fmt.Errorf("authentication/password: failed to find user: %w", err)
 	}
+
+	uuidv7.MustFromPgxUUID(user.ID)
 
 	passwordHash := pointer.ToValue(user.PasswordHash, "")
 	if passwordHash == "" {
@@ -183,10 +182,12 @@ func (h *Handler[T]) HandleUserLogin(
 		return nil, ErrPasswordIncorrect
 	}
 
+	userID := uuidv7.MustFromPgxUUID(user.ID)
+
 	// An entry point for hijacking the user registration process.
 	var payload T
 	if h.config.Hijacker != nil {
-		payload, err = h.config.Hijacker.HijackUserLogin(ctx, user.ID)
+		payload, err = h.config.Hijacker.HijackUserLogin(ctx, userID)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"authentication/password: failed to hijack user login: %w",
@@ -196,7 +197,7 @@ func (h *Handler[T]) HandleUserLogin(
 	}
 
 	return &strategy.User[T]{
-		ID: user.ID,
+		ID: userID,
 		T:  payload,
 	}, nil
 }

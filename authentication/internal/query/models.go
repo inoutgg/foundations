@@ -5,31 +5,30 @@
 package query
 
 import (
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type PasswordResetToken struct {
-	ID        uuid.UUID
+	ID        pgtype.UUID
 	CreatedAt pgtype.Timestamp
 	UpdatedAt pgtype.Timestamp
 	IsUsed    bool
 	Token     string
 	ExpiresAt pgtype.Timestamp
-	UserID    uuid.UUID
+	UserID    pgtype.UUID
 }
 
 type SsoProviderUser struct {
-	ID             uuid.UUID
+	ID             pgtype.UUID
 	CreatedAt      pgtype.Timestamp
 	UpdatedAt      pgtype.Timestamp
 	ProviderName   string
-	UserID         uuid.UUID
+	UserID         pgtype.UUID
 	ProviderUserID string
 }
 
 type User struct {
-	ID              uuid.UUID
+	ID              pgtype.UUID
 	CreatedAt       pgtype.Timestamp
 	UpdatedAt       pgtype.Timestamp
 	Email           string
@@ -40,20 +39,19 @@ type User struct {
 }
 
 type UserEmailVerificationToken struct {
-	ID        uuid.UUID
+	ID        pgtype.UUID
 	CreatedAt pgtype.Timestamp
 	UpdatedAt pgtype.Timestamp
 	IsUsed    bool
 	Token     string
 	Email     string
-	UserID    uuid.UUID
+	UserID    pgtype.UUID
 }
 
 type UserSession struct {
-	ID        uuid.UUID
+	ID        pgtype.UUID
 	CreatedAt pgtype.Timestamp
 	UpdatedAt pgtype.Timestamp
 	ExpiresAt pgtype.Timestamp
-	Token     string
-	UserID    uuid.UUID
+	UserID    pgtype.UUID
 }

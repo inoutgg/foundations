@@ -22,8 +22,8 @@ type Option struct {
 	Domain    string
 	Secure    bool
 	HttpOnly  bool
-	SameSite  http.SameSite
-	Path      string
+	SameSite  http.SameSite // optional (default to: http.SameSiteLaxMode)
+	Path      string        // optional (default to: "/")
 }
 
 // WithExpiresIn sets the ExpiresIn option on the cookie.
@@ -51,6 +51,7 @@ func WithDomain(domain string) func(*Option) {
 func Set(w http.ResponseWriter, name, value string, options ...func(*Option)) {
 	opt := Option{
 		SameSite: http.SameSiteDefaultMode,
+		Path:     "/",
 	}
 
 	for _, o := range options {

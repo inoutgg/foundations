@@ -8,7 +8,6 @@ package query
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -19,14 +18,14 @@ RETURNING id
 `
 
 type CreateUserSessionParams struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
 	ExpiresAt pgtype.Timestamp
 }
 
-func (q *Queries) CreateUserSession(ctx context.Context, arg CreateUserSessionParams) (uuid.UUID, error) {
+func (q *Queries) CreateUserSession(ctx context.Context, arg CreateUserSessionParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, createUserSession, arg.ID, arg.UserID, arg.ExpiresAt)
-	var id uuid.UUID
+	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -38,15 +37,15 @@ WHERE user_id = $1::UUID
 RETURNING id
 `
 
-func (q *Queries) ExpireAllSessionsByUserID(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+func (q *Queries) ExpireAllSessionsByUserID(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, expireAllSessionsByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []uuid.UUID
+	var items []pgtype.UUID
 	for rows.Next() {
-		var id uuid.UUID
+		var id pgtype.UUID
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
@@ -62,20 +61,20 @@ const expireSessionByID = `-- name: ExpireSessionByID :one
 UPDATE user_sessions SET expires_at = NOW() WHERE id = $1::UUID RETURNING id
 `
 
-func (q *Queries) ExpireSessionByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+func (q *Queries) ExpireSessionByID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, expireSessionByID, id)
 	err := row.Scan(&id)
 	return id, err
 }
 
 const findUserSessionByID = `-- name: FindUserSessionByID :one
-SELECT id, created_at, updated_at, expires_at, token, user_id
+SELECT id, created_at, updated_at, expires_at, user_id
 FROM user_sessions
-WHERE id = $1::UUID AND expires_at < NOW()
+WHERE id = $1::UUID AND expires_at > NOW()
 LIMIT 1
 `
 
-func (q *Queries) FindUserSessionByID(ctx context.Context, id uuid.UUID) (UserSession, error) {
+func (q *Queries) FindUserSessionByID(ctx context.Context, id pgtype.UUID) (UserSession, error) {
 	row := q.db.QueryRow(ctx, findUserSessionByID, id)
 	var i UserSession
 	err := row.Scan(
@@ -83,7 +82,6 @@ func (q *Queries) FindUserSessionByID(ctx context.Context, id uuid.UUID) (UserSe
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ExpiresAt,
-		&i.Token,
 		&i.UserID,
 	)
 	return i, err

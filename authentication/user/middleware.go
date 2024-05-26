@@ -9,6 +9,7 @@ import (
 	"go.inout.gg/common/authentication/strategy"
 	httperror "go.inout.gg/common/http/error"
 	"go.inout.gg/common/http/errorhandler"
+	"go.inout.gg/common/http/middleware"
 )
 
 type ctxKey struct{}
@@ -56,10 +57,6 @@ func Middleware[T any](
 
 					return
 				}
-
-				if config.Logger != nil {
-					config.Logger.WarnContext(r.Context(), "unauthorized access", "error", err)
-				}
 			}
 
 			newCtx := context.WithValue(r.Context(), kCtxKey, user)
@@ -71,20 +68,43 @@ func Middleware[T any](
 	}
 }
 
+// PreventAuthenticatedUserAccessMiddleware is a middleware that redirects the user to the
+// provided URL if the user is authenticated.
+func PreventAuthenticatedUserAccessMiddleware(redirectUrl string) middleware.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if IsAuthorized(r.Context()) {
+				// TODO: support HTMX here.
+				http.Redirect(w, r, redirectUrl, http.StatusTemporaryRedirect)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // FromRequest returns the user from the request context if it exists.
 //
 // Make sure to use the Middleware before calling this function.
-func FromRequest[T any](r *http.Request) *strategy.User[T] {
+func FromRequest[T any](r *http.Request) *strategy.Session[T] {
 	return FromContext[T](r.Context())
 }
 
 // FromContext returns the user from the context if it exists.
 //
 // Make sure to use the Middleware before calling this function.
-func FromContext[T any](ctx context.Context) *strategy.User[T] {
-	if user, ok := ctx.Value(kCtxKey).(*strategy.User[T]); ok {
+func FromContext[T any](ctx context.Context) *strategy.Session[T] {
+	if user, ok := ctx.Value(kCtxKey).(*strategy.Session[T]); ok {
 		return user
 	}
 
 	return nil
+}
+
+// IsAuthorized returns true if the user is authorized.
+//
+// It is a shortcut for FromContext(r.Context())!= nil.
+func IsAuthorized(ctx context.Context) bool {
+	return FromContext[any](ctx) != nil
 }

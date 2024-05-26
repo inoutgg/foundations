@@ -195,6 +195,8 @@ func (h *FormHandler[T]) HandleUserLogin(
 	if err != nil {
 		if errors.Is(err, authentication.ErrAuthorizedUser) {
 			return nil, httperror.FromError(err, http.StatusForbidden)
+		} else if errors.Is(err, ErrPasswordIncorrect) || errors.Is(err, authentication.ErrUserNotFound) {
+			return nil, httperror.FromError(err, http.StatusUnauthorized, "either email or password is incorrect")
 		}
 
 		return nil, httperror.FromError(err, http.StatusInternalServerError)

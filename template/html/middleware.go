@@ -6,12 +6,7 @@ import (
 	"net/http"
 
 	"go.inout.gg/common/http/middleware"
-)
-
-var (
-	ErrMissingContextKey = errors.New(
-		"http/render: unable to retrieve render from request context. Make sure to use corresponding middleware.",
-	)
+	"go.inout.gg/common/must"
 )
 
 type ctxKey struct{}
@@ -30,7 +25,9 @@ func Middleware(r Renderer) middleware.MiddlewareFunc {
 func Render(w http.ResponseWriter, req *http.Request, name string, vars ...any) error {
 	render, ok := req.Context().Value(kCtxKey).(Renderer)
 	if !ok {
-		return ErrMissingContextKey
+		return errors.New(
+			"http/render: unable to retrieve render from request context. Make sure to use corresponding middleware.",
+		)
 	}
 
 	if err := render.Render(w, name, vars); err != nil {
@@ -42,7 +39,5 @@ func Render(w http.ResponseWriter, req *http.Request, name string, vars ...any) 
 
 // MustRender is like Render, but panics if an error occurs.
 func MustRender(w http.ResponseWriter, req *http.Request, name string, vars ...any) {
-	if err := Render(w, req, name, vars...); err != nil {
-		panic(err)
-	}
+	must.Must1(Render(w, req, name, vars...))
 }

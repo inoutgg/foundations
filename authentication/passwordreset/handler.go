@@ -104,8 +104,7 @@ func (h *Handler) HandlePasswordReset(
 	email string,
 ) error {
 	// Forbid authorized user access.
-	usr := user.FromContext[any](ctx)
-	if usr != nil {
+	if user.IsAuthorized(ctx) {
 		return authentication.ErrAuthorizedUser
 	}
 
@@ -123,7 +122,7 @@ func (h *Handler) HandlePasswordReset(
 
 	tokStr := must.Must(random.SecureHexString(h.config.TokenLength))
 	tok, err := q.UpsertPasswordResetToken(ctx, query.UpsertPasswordResetTokenParams{
-		ID:     uuidv7.Must(),
+		ID:     uuidv7.ToPgxUUID(uuidv7.Must()),
 		Token:  tokStr,
 		UserID: user.ID,
 		ExpiresAt: pgtype.Timestamp{

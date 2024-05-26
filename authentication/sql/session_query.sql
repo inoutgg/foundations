@@ -6,7 +6,7 @@ RETURNING id;
 -- name: FindUserSessionByID :one
 SELECT *
 FROM user_sessions
-WHERE id = @id::UUID AND expires_at < NOW()
+WHERE id = @id::UUID AND expires_at > NOW()
 LIMIT 1;
 
 -- name: ExpireSessionByID :one

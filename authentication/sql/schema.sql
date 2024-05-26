@@ -61,10 +61,9 @@ CREATE TABLE user_sessions (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at TIMESTAMP NOT NULL,
-  token VARCHAR(128) NOT NULL,
   user_id UUID NOT NULL,
   PRIMARY KEY (user_id, id),
-  UNIQUE (token),
+  UNIQUE (id),
   FOREIGN KEY (user_id) REFERENCES users (id)
     ON DELETE CASCADE,
   CHECK (expires_at > CURRENT_TIMESTAMP),

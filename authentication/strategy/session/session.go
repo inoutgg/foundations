@@ -3,6 +3,7 @@ package session
 import (
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -12,8 +13,6 @@ import (
 	"go.inout.gg/common/authentication/internal/query"
 	"go.inout.gg/common/authentication/strategy"
 	"go.inout.gg/common/http/cookie"
-	"go.inout.gg/common/must"
-	"go.inout.gg/common/random"
 	"go.inout.gg/common/sql/dbutil"
 	"go.inout.gg/common/uuidv7"
 )
@@ -31,6 +30,8 @@ type sessionStrategy[T any] struct {
 }
 
 type Config struct {
+	Logger *slog.Logger
+
 	CookieName string        // optinal (default: "usid")
 	ExpiresIn  time.Duration // optinal (default: 12h)
 }
@@ -41,6 +42,7 @@ type Config struct {
 // store the session ID.
 func New[T any](driver driver.Driver, config ...func(*Config)) strategy.Authenticator[T] {
 	cfg := &Config{
+		Logger:     slog.Default().With("module", "authentication/session"),
 		CookieName: DefaultCookieName,
 		ExpiresIn:  DefaultExpiresIn,
 	}
@@ -58,22 +60,21 @@ func (s *sessionStrategy[T]) Issue(
 ) (*strategy.Session[T], error) {
 	ctx := r.Context()
 	q := s.driver.Queries()
-
 	sessionID := uuidv7.Must()
 	expiresAt := time.Now().Add(s.config.ExpiresIn)
-	token := must.Must(random.SecureHexString(64))
-	if _, err := q.CreateUserSession(ctx, query.CreateUserSessionParams{
-		ID:        sessionID,
-		UserID:    user.ID,
+	_, err := q.CreateUserSession(ctx, query.CreateUserSessionParams{
+		ID:        uuidv7.ToPgxUUID(sessionID),
+		UserID:    uuidv7.ToPgxUUID(user.ID),
 		ExpiresAt: pgtype.Timestamp{Time: expiresAt, Valid: true},
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, fmt.Errorf("authentication/session: failed to create session: %w", err)
 	}
 
 	cookie.Set(
 		w,
 		s.config.CookieName,
-		s.encode(token),
+		s.encode(sessionID.String()),
 		cookie.WithHttpOnly,
 		cookie.WithExpiresIn(s.config.ExpiresIn),
 	)
@@ -90,7 +91,7 @@ func (s *sessionStrategy[T]) Authenticate(
 	r *http.Request,
 ) (*strategy.Session[T], error) {
 	ctx := r.Context()
-	sessionIDStr := cookie.Get(r, DefaultCookieName)
+	sessionIDStr := cookie.Get(r, s.config.CookieName)
 	if sessionIDStr == "" {
 		return nil, authentication.ErrUnauthorizedUser
 	}
@@ -114,12 +115,25 @@ func (s *sessionStrategy[T]) Authenticate(
 	defer tx.Rollback(ctx)
 
 	q := tx.Queries()
-	session, err := q.FindUserSessionByID(ctx, sessionID)
+
+	session, err := q.FindUserSessionByID(ctx, uuidv7.ToPgxUUID(sessionID))
 	if err != nil {
 		if dbutil.IsNotFoundError(err) {
-			cookie.Delete(w, r, s.config.CookieName)
+			s.config.Logger.Error(
+				"No sessions found with given ID",
+				slog.String("session_id", sessionID.String()),
+				slog.Any("error", err),
+			)
+
+			// cookie.Delete(w, r, s.config.CookieName)
 			return nil, authentication.ErrUnauthorizedUser
 		}
+
+		s.config.Logger.Error(
+			"Unable to find a session",
+			sessionID.String(),
+			slog.Any("error", err),
+		)
 
 		return nil, fmt.Errorf("authentication/session: failed to find user session: %w", err)
 	}
@@ -129,7 +143,7 @@ func (s *sessionStrategy[T]) Authenticate(
 	}
 
 	return &strategy.Session[T]{
-		ID:        session.ID,
+		ID:        uuidv7.MustFromPgxUUID(session.ID),
 		ExpiresAt: session.ExpiresAt.Time,
 		T:         nil,
 	}, nil
