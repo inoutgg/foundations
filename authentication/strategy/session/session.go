@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.inout.gg/common/authentication"
 	"go.inout.gg/common/authentication/db/driver"
@@ -19,68 +18,93 @@ import (
 	"go.inout.gg/common/uuidv7"
 )
 
-var _ strategy.Authenticator[any] = (*session[any])(nil)
+var _ strategy.Authenticator[any] = (*sessionStrategy[any])(nil)
 
 var (
 	DefaultCookieName = "usid"
+	DefaultExpiresIn  = time.Hour * 12
 )
 
-type session[T any] struct {
+type sessionStrategy[T any] struct {
 	driver driver.Driver
 	config *Config
 }
 
 type Config struct {
-	CookieName string
-	ExpiresIn  time.Duration
+	CookieName string        // optinal (default: "usid")
+	ExpiresIn  time.Duration // optinal (default: 12h)
 }
 
 // New creates a new session authenticator.
 //
 // The sesion authenticator uses a DB to store sessions and a cookie to
 // store the session ID.
-func New[T any](driver driver.Driver, config *Config) strategy.Authenticator[T] {
-	return &session[T]{driver, config}
+func New[T any](driver driver.Driver, config ...func(*Config)) strategy.Authenticator[T] {
+	cfg := &Config{
+		CookieName: DefaultCookieName,
+		ExpiresIn:  DefaultExpiresIn,
+	}
+	for _, c := range config {
+		c(cfg)
+	}
+
+	return &sessionStrategy[T]{driver, cfg}
 }
 
-func (s *session[T]) Issue(w http.ResponseWriter, r *http.Request) error {
+func (s *sessionStrategy[T]) Issue(
+	w http.ResponseWriter,
+	r *http.Request,
+	user *strategy.User[T],
+) (*strategy.Session[T], error) {
 	ctx := r.Context()
 	q := s.driver.Queries()
 
 	sessionID := uuidv7.Must()
+	expiresAt := time.Now().Add(s.config.ExpiresIn)
 	token := must.Must(random.SecureHexString(64))
 	if _, err := q.CreateUserSession(ctx, query.CreateUserSessionParams{
 		ID:        sessionID,
-		Token:     token,
-		ExpiresAt: pgtype.Timestamp{Time: time.Now().Add(s.config.ExpiresIn), Valid: true},
+		UserID:    user.ID,
+		ExpiresAt: pgtype.Timestamp{Time: expiresAt, Valid: true},
 	}); err != nil {
-		return fmt.Errorf("authentication/session: failed to create session: %w", err)
+		return nil, fmt.Errorf("authentication/session: failed to create session: %w", err)
 	}
 
 	cookie.Set(
 		w,
 		s.config.CookieName,
-		must.Must(s.encode(token)),
+		s.encode(token),
 		cookie.WithHttpOnly,
 		cookie.WithExpiresIn(s.config.ExpiresIn),
 	)
 
-	return nil
+	return &strategy.Session[T]{
+		ID:        sessionID,
+		ExpiresAt: expiresAt,
+		T:         nil,
+	}, nil
 }
 
-func (s *session[T]) Authenticate(
+func (s *sessionStrategy[T]) Authenticate(
 	w http.ResponseWriter,
 	r *http.Request,
-) (*strategy.User[T], error) {
+) (*strategy.Session[T], error) {
 	ctx := r.Context()
-	val := cookie.Get(r, DefaultCookieName)
-	if val == "" {
+	sessionIDStr := cookie.Get(r, DefaultCookieName)
+	if sessionIDStr == "" {
 		return nil, authentication.ErrUnauthorizedUser
 	}
 
-	val, err := s.decode(val)
+	sessionIDStr, err := s.decode(sessionIDStr)
 	if err != nil {
-		return nil, fmt.Errorf("authentication/session: failed to decode session: %w", err)
+		cookie.Delete(w, r, s.config.CookieName)
+		return nil, authentication.ErrUnauthorizedUser
+	}
+
+	sessionID, err := uuidv7.FromString(sessionIDStr)
+	if err != nil {
+		cookie.Delete(w, r, s.config.CookieName)
+		return nil, authentication.ErrUnauthorizedUser
 	}
 
 	tx, err := s.driver.Begin(ctx)
@@ -90,9 +114,10 @@ func (s *session[T]) Authenticate(
 	defer tx.Rollback(ctx)
 
 	q := tx.Queries()
-	_, err = q.FindUserSessionByID(ctx, uuid.UUID{})
+	session, err := q.FindUserSessionByID(ctx, sessionID)
 	if err != nil {
 		if dbutil.IsNotFoundError(err) {
+			cookie.Delete(w, r, s.config.CookieName)
 			return nil, authentication.ErrUnauthorizedUser
 		}
 
@@ -103,15 +128,19 @@ func (s *session[T]) Authenticate(
 		return nil, fmt.Errorf("authentication/session: failed to commit transaction: %w", err)
 	}
 
-	return nil, nil
+	return &strategy.Session[T]{
+		ID:        session.ID,
+		ExpiresAt: session.ExpiresAt.Time,
+		T:         nil,
+	}, nil
 }
 
-func (s *session[T]) encode(val string) (string, error) {
+func (s *sessionStrategy[T]) encode(val string) string {
 	bytes := []byte(val)
-	return base64.URLEncoding.EncodeToString(bytes), nil
+	return base64.URLEncoding.EncodeToString(bytes)
 }
 
-func (s *session[T]) decode(val string) (string, error) {
+func (s *sessionStrategy[T]) decode(val string) (string, error) {
 	bytes, err := base64.URLEncoding.DecodeString(val)
 	if err != nil {
 		return "", fmt.Errorf("authentication/session: failed to decode cookie: %w", err)

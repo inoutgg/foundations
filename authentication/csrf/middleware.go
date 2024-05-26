@@ -120,3 +120,8 @@ func FromContext(ctx context.Context) (*Token, error) {
 
 	return tok, nil
 }
+
+// SetToken sets the CSRF token in the given HTTP response via cookie.
+func SetToken(w http.ResponseWriter, tok *Token) {
+	http.SetCookie(w, tok.Cookie())
+}

@@ -10,12 +10,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/samber/lo"
 	"go.inout.gg/common/env"
 )
 
 type Config struct {
-	FilePath   string `env:"DB_SCHEMA_PATH"`
-	SchemaName string `env:"DB_SCHEMA_NAME"`
+	FilePath   []string `env:"DB_SCHEMA_PATH" envSeparator:","`
+	SchemaName string   `env:"DB_SCHEMA_NAME"`
 }
 
 // LoadConfig loads the configuration from the environment.
@@ -50,24 +51,63 @@ WHERE table_schema=$1;
 // Init initializes tables in the database by creating a schema provided
 // by the config.
 func (db *DB) Init(ctx context.Context) error {
-	file, err := os.Open(db.config.FilePath)
+	var sql []string
+	for _, path := range db.config.FilePath {
+		schemaContent, err := readFile(path)
+		if err != nil {
+			return err
+		}
+
+		sql = append(sql, parseSchema(schemaContent)...)
+	}
+
+	tx, err := db.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("db/testing: error opening file %s: %w", db.config.FilePath, err)
+		return fmt.Errorf("db/testing: error starting transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var errs []error
+
+	for _, s := range sql {
+		_, err := tx.Exec(ctx, s)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("db/testing: error executing query %s: %w", s, err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("db/testing: error committing transaction: %w", err)
+	}
+
+	return nil
+}
+
+func readFile(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("db/testing: error opening file %s: %w", path, err)
 	}
 	defer file.Close()
 
 	buf := new(strings.Builder)
 	_, err = io.Copy(buf, file)
 	if err != nil {
-		return fmt.Errorf("db/testing: error reading file %s: %w", db.config.FilePath, err)
+		return "", fmt.Errorf("db/testing: error reading file %s: %w", path, err)
 	}
 
-	content := buf.String()
-	println(content)
+	return buf.String(), nil
+}
 
-	// TODO: create a table in TX.
+func parseSchema(schema string) []string {
+	return lo.Filter(strings.Split(schema, ";"), func(s string, _ int) bool {
+		return strings.TrimSpace(s) != ""
+	})
 
-	return nil
 }
 
 // TruncateTable truncates the given table.

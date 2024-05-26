@@ -15,11 +15,12 @@ CREATE TABLE user_email_verification_tokens (
   id UUID NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  is_used BOOLEAN NOT NULL DEFAULT FALSE,
   token VARCHAR(16) NOT NULL,
   email VARCHAR(255) NOT NULL,
   user_id UUID NOT NULL,
   PRIMARY KEY (user_id, id),
-  UNIQUE (email),
+  UNIQUE (email, is_used),
   UNIQUE (token),
   FOREIGN KEY (user_id) REFERENCES users (id)
     ON DELETE CASCADE
@@ -48,7 +49,7 @@ CREATE TABLE password_reset_tokens (
   user_id UUID NOT NULL,
   PRIMARY KEY (user_id, id),
   UNIQUE (token),
-  UNIQUE (user_id),
+  UNIQUE (user_id, is_used),
   FOREIGN KEY (user_id) REFERENCES users (id)
     ON DELETE CASCADE,
   CHECK (expires_at > CURRENT_TIMESTAMP),

@@ -12,16 +12,15 @@ import (
 // Load loads the environment configuration into a struct T.
 //
 // By default if no paths are provided, it will look for a file called .env.
+// If no file is found, it will simply ignore it.
 //
-// Make sure to use the `envPrefix` tag from the github.com/caarlos0/env/v10 package,
+// Make sure to use the `env` tag from the github.com/caarlos0/env/v11 package,
 // to specify the environment variable name.
 func Load[T any](paths ...string) (*T, error) {
 	var config T
 
 	// Try to load an .env file.
-	if err := dotenv.Load(paths...); err != nil {
-		return nil, fmt.Errorf("env: failed to load env file: %w", err)
-	}
+	_ = dotenv.Load(paths...)
 
 	if err := env.Parse(&config); err != nil {
 		return nil, fmt.Errorf("env: failed to load environment configuration: %w", err)

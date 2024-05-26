@@ -21,6 +21,31 @@ FROM sso_provider_users
 WHERE provider_user_id = @provider_user_id AND provider_name = @provider_name
 LIMIT 1;
 
+-- name: SetUserEmailByID :exec
+UPDATE users
+SET
+  email = @email,
+  is_email_verified = FALSE
+WHERE id = @id;
+
+-- name: UpsertEmailVerificationToken :one
+WITH
+  token AS (
+    INSERT INTO user_email_verification_tokens
+      (id, user_id, token, is_used)
+    VALUES
+      (@id::UUID, @user_id, @token, @expires_at, FALSE)
+    ON CONFLICT (user_id, is_used) DO NOTHING
+    RETURNING token, id
+  )
+SELECT *
+FROM token;
+
+-- name: MarkUserEmailVerificationTokenAsUsed :exec
+UPDATE user_email_verification_tokens
+SET is_used = TRUE
+WHERE token = @token;
+
 -- name: SetUserPasswordByID :exec
 UPDATE users
 SET password_hash = @password_hash
@@ -32,7 +57,7 @@ WITH
     INSERT INTO password_reset_tokens (id, user_id, token, expires_at, is_used)
     VALUES
       (@id::UUID, @user_id, @token, @expires_at, FALSE)
-    ON CONFLICT (user_id) DO UPDATE
+    ON CONFLICT (user_id, is_used) DO UPDATE
       SET expires_at = greatest(
         excluded.expires_at,
         password_reset_tokens.expires_at
@@ -41,26 +66,6 @@ WITH
   )
 SELECT *
 FROM token;
-
--- name: CreateUserSession :one
-INSERT INTO user_sessions (id, user_id, token, expires_at)
-VALUES (@id::UUID, @user_id::UUID, @token, @expires_at)
-RETURNING id;
-
--- name: FindUserSessionByID :one
-SELECT *
-FROM user_sessions
-WHERE id = @id::UUID AND expires_at < NOW()
-LIMIT 1;
-
--- name: ExpireSessionByID :one
-UPDATE user_sessions SET expires_at = NOW() WHERE id = @id::UUID RETURNING id;
-
--- name: ExpireAllSessionsByUserID :many
-UPDATE user_sessions
-SET expires_at = NOW()
-WHERE user_id = @user_id::UUID
-RETURNING id;
 
 -- name: FindPasswordResetToken :one
 SELECT *

@@ -35,12 +35,15 @@ type User struct {
 	Email           string
 	IsEmailVerified bool
 	PasswordHash    *string
+	FirstName       *string
+	LastName        *string
 }
 
 type UserEmailVerificationToken struct {
 	ID        uuid.UUID
 	CreatedAt pgtype.Timestamp
 	UpdatedAt pgtype.Timestamp
+	IsUsed    bool
 	Token     string
 	Email     string
 	UserID    uuid.UUID
