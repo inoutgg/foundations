@@ -125,13 +125,13 @@ func (s *sessionStrategy[T]) Authenticate(
 				slog.Any("error", err),
 			)
 
-			// cookie.Delete(w, r, s.config.CookieName)
+			cookie.Delete(w, r, s.config.CookieName)
 			return nil, authentication.ErrUnauthorizedUser
 		}
 
 		s.config.Logger.Error(
 			"Unable to find a session",
-			sessionID.String(),
+			slog.String("session_id", sessionID.String()),
 			slog.Any("error", err),
 		)
 

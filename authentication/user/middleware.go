@@ -9,6 +9,7 @@ import (
 	"go.inout.gg/common/authentication/strategy"
 	httperror "go.inout.gg/common/http/error"
 	"go.inout.gg/common/http/errorhandler"
+	"go.inout.gg/common/http/htmx"
 	"go.inout.gg/common/http/middleware"
 )
 
@@ -70,12 +71,13 @@ func Middleware[T any](
 
 // PreventAuthenticatedUserAccessMiddleware is a middleware that redirects the user to the
 // provided URL if the user is authenticated.
+//
+// Make sure to use the Middleware before calling this function.
 func PreventAuthenticatedUserAccessMiddleware(redirectUrl string) middleware.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if IsAuthorized(r.Context()) {
-				// TODO: support HTMX here.
-				http.Redirect(w, r, redirectUrl, http.StatusTemporaryRedirect)
+				htmx.Redirect(w, r, redirectUrl, http.StatusTemporaryRedirect)
 				return
 			}
 
