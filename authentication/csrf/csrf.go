@@ -131,8 +131,8 @@ func (t *Token) String() string {
 	return t.value
 }
 
-// Cookie returns an HTTP cookie containing the CSRF token.
-func (t *Token) Cookie() *http.Cookie {
+// cookie returns an HTTP cookie containing the CSRF token.
+func (t *Token) cookie() *http.Cookie {
 	cookie := http.Cookie{
 		Name:     t.config.cookieName(),
 		Value:    t.cookieValue(),

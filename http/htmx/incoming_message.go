@@ -38,6 +38,7 @@ func (p *IncomingMessage) Partial() bool {
 
 // FromRequest creates a new Proto from the given HTTP request.
 func FromRequest(r *http.Request) *IncomingMessage {
+	// TODO(roman@inout.gg): cache the result.
 	return &IncomingMessage{
 		Boosted:               toBool(r.Header.Get(HxRequestHeaderKeyBoosted)),
 		CurrentURL:            r.Header.Get(HxRequestHeaderKeyCurrentURL),

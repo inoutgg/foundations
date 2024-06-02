@@ -15,7 +15,7 @@ import (
 	"go.inout.gg/common/authentication/strategy"
 	"go.inout.gg/common/authentication/user"
 	"go.inout.gg/common/pointer"
-	"go.inout.gg/common/sql/dbutil"
+	"go.inout.gg/common/sql/db/dbutil"
 	"go.inout.gg/common/uuidv7"
 )
 

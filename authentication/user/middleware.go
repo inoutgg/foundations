@@ -72,7 +72,7 @@ func Middleware[T any](
 // PreventAuthenticatedUserAccessMiddleware is a middleware that redirects the user to the
 // provided URL if the user is authenticated.
 //
-// Make sure to use the Middleware before calling this function.
+// Make sure to use the Middleware before adding this one.
 func PreventAuthenticatedUserAccessMiddleware(redirectUrl string) middleware.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +106,7 @@ func FromContext[T any](ctx context.Context) *strategy.Session[T] {
 
 // IsAuthorized returns true if the user is authorized.
 //
-// It is a shortcut for FromContext(r.Context())!= nil.
+// It is a shortcut for FromContext(r.Context())!=nil.
 func IsAuthorized(ctx context.Context) bool {
 	return FromContext[any](ctx) != nil
 }

@@ -1,17 +1,18 @@
 // Package dbtesting providers utilities for testing database related code.
-package dbtesting
+package dbtest
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -43,17 +44,23 @@ func queryDropTable(
 }
 
 type Config struct {
-	Logger *slog.Logger
+	// TimeoutSecond is the timeout for establishing a connection to the database.
+	TimeoutSecond int `env:"DB_CONN_TIMEOUT" envDefault:"5"` // optional (default: 5)
 
 	// DatabaseURI is the connection string for the database.
-	DatabaseURI string   `env:"DATABASE_URI"`
-	Schema      string   `env:"DB_SCHEMA"      envDefault:"public"`
-	FilePath    []string `env:"DB_SCHEMA_PATH"                     envSeparator:","`
+	DatabaseURI string `env:"DATABASE_URI"`
+
+	// Schema is the schema to use for the database.
+	Schema string `env:"DB_SCHEMA" envDefault:"public"` // optional (default: "public")
+
+	// FilePath is the path to the DDL file.
+	FilePath []string `env:"DB_SCHEMA_PATH" envSeparator:","`
 }
 
 // MustLoadConfig loads the configuration from the environment.
 //
-// If no paths are provided, the default path ".test.env" in the root of the project.
+// If no paths are provided, it defaults to ".test.env" in the current module path
+// and in the root of the project.
 //
 // It panics if there is an error loading the configuration.
 func MustLoadConfig(paths ...string) *Config {
@@ -65,9 +72,7 @@ func MustLoadConfig(paths ...string) *Config {
 		}
 	}
 
-	// TODO: add support for custom logger.
 	config := env.MustLoad[Config](paths...)
-	config.Logger = slog.Default().With("module", "dbtesting")
 
 	return config
 }
@@ -75,17 +80,19 @@ func MustLoadConfig(paths ...string) *Config {
 // DB is a wrapper around pgxpool.Pool with useful utilities for DB management
 // in tests.
 type DB struct {
-	pool      *pgxpool.Pool
 	config    *Config
+	tb        testing.TB
+	pool      *pgxpool.Pool
 	closeOnce sync.Once
 }
 
-func makePool(cfg *Config) *pgxpool.Pool {
-	ctx := context.Background()
+func makePool(ctx context.Context, cfg *Config) *pgxpool.Pool {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(cfg.TimeoutSecond))
+	defer cancel()
+
 	config := must.Must(pgxpool.ParseConfig(cfg.DatabaseURI))
 	pool := must.Must(pgxpool.NewWithConfig(ctx, config))
 
-	cfg.Logger.Debug("Ping database", slog.String("uri", config.ConnString()))
 	must.Must1(pool.Ping(ctx))
 
 	return pool
@@ -96,14 +103,21 @@ func makePool(cfg *Config) *pgxpool.Pool {
 // It initializes a new pool with the given config.
 //
 // It panics if there is an error initializing a connection to the database.
-func Must(config *Config) *DB {
-	pool := makePool(config)
+func Must(ctx context.Context, tb testing.TB, config *Config) *DB {
+	tb.Helper()
 
-	return &DB{
-		pool,
+	pool := makePool(ctx, config)
+	db := &DB{
 		config,
+		tb,
+		pool,
 		sync.Once{},
 	}
+
+	tb.Cleanup(db.Close)
+
+	return db
+
 }
 
 // Pool returns the underlying pool.
@@ -116,6 +130,8 @@ func (db *DB) close() { db.pool.Close() }
 // Init initializes tables in the database by creating a schema provided
 // by the config.
 func (db *DB) Init(ctx context.Context) error {
+	db.tb.Helper()
+
 	var sql []string
 	for _, path := range db.config.FilePath {
 		schemaContent, err := readFile(path)
@@ -128,7 +144,7 @@ func (db *DB) Init(ctx context.Context) error {
 
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("db/testing: error starting transaction: %w", err)
+		return fmt.Errorf("dbtesting: error starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -137,7 +153,7 @@ func (db *DB) Init(ctx context.Context) error {
 	for _, s := range sql {
 		_, err := tx.Exec(ctx, s)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("db/testing: error executing query %s: %w", s, err))
+			errs = append(errs, fmt.Errorf("dbtesting: error executing query %s: %w", s, err))
 		}
 	}
 
@@ -146,7 +162,7 @@ func (db *DB) Init(ctx context.Context) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("db/testing: error committing transaction: %w", err)
+		return fmt.Errorf("dbtesting: error committing transaction: %w", err)
 	}
 
 	return nil
@@ -154,9 +170,11 @@ func (db *DB) Init(ctx context.Context) error {
 
 // TruncateTable truncates the given table.
 func (db *DB) TruncateTable(ctx context.Context, table string) error {
+	db.tb.Helper()
+
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("db/testing: error starting transaction: %w", err)
+		return fmt.Errorf("dbtesting: error starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -165,7 +183,7 @@ func (db *DB) TruncateTable(ctx context.Context, table string) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("db/testing: error committing transaction: %w", err)
+		return fmt.Errorf("dbtesting: error committing transaction: %w", err)
 	}
 
 	return nil
@@ -173,7 +191,7 @@ func (db *DB) TruncateTable(ctx context.Context, table string) error {
 
 func (db *DB) truncateTable(ctx context.Context, table string, tx pgx.Tx) error {
 	if _, err := tx.Exec(ctx, queryTruncateTable(table)); err != nil {
-		return fmt.Errorf("db/testing: error truncating table %s: %w", table, err)
+		return fmt.Errorf("dbtesting: error truncating table %s: %w", table, err)
 	}
 
 	return nil
@@ -181,10 +199,11 @@ func (db *DB) truncateTable(ctx context.Context, table string, tx pgx.Tx) error 
 
 // TruncateTables truncates the given tables.
 func (db *DB) TruncateTables(ctx context.Context, tables []string) error {
+	db.tb.Helper()
 
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("db/testing: error starting transaction: %w", err)
+		return fmt.Errorf("dbtesting: error starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -200,7 +219,7 @@ func (db *DB) TruncateTables(ctx context.Context, tables []string) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("db/testing: error committing transaction: %w", err)
+		return fmt.Errorf("dbtesting: error committing transaction: %w", err)
 	}
 
 	return nil
@@ -208,6 +227,8 @@ func (db *DB) TruncateTables(ctx context.Context, tables []string) error {
 
 // TruncateAllTables truncates all tables in the database.
 func (db *DB) TruncateAllTables(ctx context.Context) error {
+	db.tb.Helper()
+
 	tables, err := db.fetchAllTables(ctx)
 	if err != nil {
 		return err
@@ -217,6 +238,8 @@ func (db *DB) TruncateAllTables(ctx context.Context) error {
 }
 
 func (db *DB) DropAllTables(ctx context.Context) error {
+	db.tb.Helper()
+
 	tables, err := db.fetchAllTables(ctx)
 	if err != nil {
 		return err
@@ -224,7 +247,7 @@ func (db *DB) DropAllTables(ctx context.Context) error {
 
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("db/testing: error starting transaction: %w", err)
+		return fmt.Errorf("dbtesting: error starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -240,16 +263,15 @@ func (db *DB) DropAllTables(ctx context.Context) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("db/testing: error committing transaction: %w", err)
+		return fmt.Errorf("dbtesting: error committing transaction: %w", err)
 	}
 
 	return nil
 }
 
 func (db *DB) dropTable(ctx context.Context, table string, tx pgx.Tx) error {
-	db.config.Logger.Debug("Drop table", slog.String("table", table))
 	if _, err := tx.Exec(ctx, queryDropTable(table)); err != nil {
-		return fmt.Errorf("db/testing: error dropping table: %w", err)
+		return fmt.Errorf("dbtesting: error dropping table: %w", err)
 	}
 
 	return nil
@@ -257,6 +279,8 @@ func (db *DB) dropTable(ctx context.Context, table string, tx pgx.Tx) error {
 
 // Reset resets the database by truncating all tables and re-creating them.
 func (db *DB) Reset(ctx context.Context) error {
+	db.tb.Helper()
+
 	if err := db.DropAllTables(ctx); err != nil {
 		return err
 	}
@@ -272,14 +296,14 @@ func (db *DB) fetchAllTables(ctx context.Context) ([]string, error) {
 		pgtype.Text{String: db.config.Schema, Valid: true},
 	)
 	if err != nil {
-		return tables, fmt.Errorf("db/testing: error fetching tables: %w", err)
+		return tables, fmt.Errorf("dbtesting: error fetching tables: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var table pgtype.Text
 		if err := rows.Scan(&table); err != nil {
-			return tables, fmt.Errorf("db/testing: error scanning table name: %w", err)
+			return tables, fmt.Errorf("dbtesting: error scanning table name: %w", err)
 		}
 
 		tables = append(tables, table.String)
@@ -317,14 +341,14 @@ func findModuleRoot(dir string) string {
 func readFile(path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("db/testing: error opening file %s: %w", path, err)
+		return "", fmt.Errorf("dbtesting: error opening file %s: %w", path, err)
 	}
 	defer file.Close()
 
 	buf := new(strings.Builder)
 	_, err = io.Copy(buf, file)
 	if err != nil {
-		return "", fmt.Errorf("db/testing: error reading file %s: %w", path, err)
+		return "", fmt.Errorf("dbtesting: error reading file %s: %w", path, err)
 	}
 
 	return buf.String(), nil

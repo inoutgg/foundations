@@ -18,8 +18,8 @@ var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	http.SetCookie(w, tok.Cookie())
-	w.Write([]byte("ok"))
+	SetToken(w, tok)
+	_, _ = w.Write([]byte("ok"))
 })
 
 func TestMethods(t *testing.T) {
@@ -92,7 +92,7 @@ func TestSuccessCase(t *testing.T) {
 	// Test if token is set.
 	req = httptest.NewRequest(http.MethodPost, "/", nil)
 	req.Header.Set(DefaultHeaderName, tok.String())
-	req.AddCookie(tok.Cookie())
+	req.AddCookie(tok.cookie())
 	route.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
@@ -125,7 +125,7 @@ func TestMismatchingTokensFailureCase(t *testing.T) {
 	// Test if token is set.
 	req = httptest.NewRequest(http.MethodPost, "/", nil)
 	req.Header.Set(DefaultHeaderName, "hello-world")
-	req.AddCookie(tok.Cookie())
+	req.AddCookie(tok.cookie())
 	route.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusForbidden {

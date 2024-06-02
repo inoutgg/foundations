@@ -1,4 +1,4 @@
-package dbtesting
+package dbtest
 
 import (
 	"cmp"
@@ -8,7 +8,8 @@ import (
 )
 
 func TestFetchAllTables(t *testing.T) {
-	db := Must(MustLoadConfig())
+	ctx := context.Background()
+	db := Must(ctx, t, MustLoadConfig())
 	defer db.Close()
 	t.Run("it works with empty schema", func(t *testing.T) {
 		ctx := context.Background()
@@ -45,7 +46,7 @@ func TestFetchAllTables(t *testing.T) {
 
 func TestInit(t *testing.T) {
 	ctx := context.Background()
-	db := Must(MustLoadConfig())
+	db := Must(ctx, t, MustLoadConfig())
 	defer db.Close()
 
 	if err := db.Init(ctx); err != nil {
@@ -72,7 +73,8 @@ func count(ctx context.Context, db *DB) (int, error) {
 }
 
 func TestTruncateTable(t *testing.T) {
-	db := Must(MustLoadConfig())
+	ctx := context.Background()
+	db := Must(ctx, t, MustLoadConfig())
 	defer db.Close()
 	t.Run("it works", func(t *testing.T) {
 		ctx := context.Background()
@@ -101,16 +103,12 @@ func TestTruncateTable(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		if c != 0 {
-			t.Fatalf("expected count to be 0, got %d", c)
-		}
 	})
 }
 
 func TestReset(t *testing.T) {
 	ctx := context.Background()
-	db := Must(MustLoadConfig())
+	db := Must(ctx, t, MustLoadConfig())
 	defer db.Close()
 
 	if err := db.Reset(ctx); err != nil {

@@ -1,0 +1,3 @@
+package logtesting
+
+func NewLogger() {}

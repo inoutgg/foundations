@@ -28,7 +28,7 @@ var (
 )
 
 var (
-	DefaultTokenLength = 64
+	DefaultTokenLength = 32
 )
 
 // Config is the configuration for the CSRF middleware.
@@ -123,5 +123,5 @@ func FromContext(ctx context.Context) (*Token, error) {
 
 // SetToken sets the CSRF token in the given HTTP response via cookie.
 func SetToken(w http.ResponseWriter, tok *Token) {
-	http.SetCookie(w, tok.Cookie())
+	http.SetCookie(w, tok.cookie())
 }

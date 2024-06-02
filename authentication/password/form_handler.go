@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/go-playground/mold/v4"
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/mold/v4/scrubbers"
 	"github.com/go-playground/validator/v10"
@@ -16,9 +15,9 @@ import (
 )
 
 var (
-	DefaultFormValidate = validator.New()
-	DefaultFormScrubber = scrubbers.New()
-	DefaultFormModifier = modifiers.New()
+	FormValidator = validator.New(validator.WithRequiredStructEnabled())
+	FormScrubber  = scrubbers.New()
+	FormModifier  = modifiers.New()
 )
 
 const (
@@ -31,14 +30,10 @@ const (
 type FormConfig[T any] struct {
 	*Config[T]
 
-	Validator    *validator.Validate
-	FormScrubber *mold.Transformer
-	FormModifier *mold.Transformer
-
-	FirstNameFieldName string
-	LastNameFieldName  string
-	EmailFieldName     string
-	PasswordFieldName  string
+	FirstNameFieldName string // optional (default: DefaultFieldNameFirstName)
+	LastNameFieldName  string // optional (default: DefaultFieldNameLastName)
+	EmailFieldName     string // optional (default: DefaultFieldNameEmail)
+	PasswordFieldName  string // optional (default: DefaultFieldNamePassword)
 }
 
 // NewFormConfig[T] creates a new FormConfig[T] with the given configuration options.
@@ -57,18 +52,6 @@ func NewFormConfig[T any](config ...func(*FormConfig[T])) *FormConfig[T] {
 	// Set defaults.
 	if cfg.Config == nil {
 		cfg.Config = NewConfig[T]()
-	}
-
-	if cfg.Validator == nil {
-		cfg.Validator = DefaultFormValidate
-	}
-
-	if cfg.FormScrubber == nil {
-		cfg.FormScrubber = DefaultFormScrubber
-	}
-
-	if cfg.FormModifier == nil {
-		cfg.FormModifier = DefaultFormModifier
 	}
 
 	return cfg
@@ -125,11 +108,11 @@ func (h *FormHandler[T]) parseUserRegistrationForm(
 		Password:  req.PostFormValue(h.config.PasswordFieldName),
 	}
 
-	if err := h.config.FormModifier.Struct(ctx, form); err != nil {
+	if err := FormModifier.Struct(ctx, form); err != nil {
 		return nil, fmt.Errorf("password: failed to parse request form: %w", err)
 	}
 
-	if err := h.config.Validator.Struct(form); err != nil {
+	if err := FormValidator.Struct(form); err != nil {
 		return nil, fmt.Errorf("password: failed to parse request form: %w", err)
 	}
 
@@ -137,10 +120,7 @@ func (h *FormHandler[T]) parseUserRegistrationForm(
 }
 
 // HandleUserRegistration handles a user registration request.
-func (h *FormHandler[T]) HandleUserRegistration(
-	w http.ResponseWriter,
-	r *http.Request,
-) (*strategy.User[T], error) {
+func (h *FormHandler[T]) HandleUserRegistration(r *http.Request) (*strategy.User[T], error) {
 	form, err := h.parseUserRegistrationForm(r)
 	if err != nil {
 		return nil, httperror.FromError(err, http.StatusBadRequest)
@@ -170,11 +150,11 @@ func (h *FormHandler[T]) parseUserLoginForm(req *http.Request) (*userLoginForm, 
 		Password: req.PostFormValue(h.config.PasswordFieldName),
 	}
 
-	if err := h.config.FormModifier.Struct(ctx, form); err != nil {
+	if err := FormModifier.Struct(ctx, form); err != nil {
 		return nil, fmt.Errorf("password: failed to parse request form: %w", err)
 	}
 
-	if err := h.config.Validator.Struct(form); err != nil {
+	if err := FormValidator.Struct(form); err != nil {
 		return nil, fmt.Errorf("password: failed to parse request form: %w", err)
 	}
 
@@ -182,10 +162,7 @@ func (h *FormHandler[T]) parseUserLoginForm(req *http.Request) (*userLoginForm, 
 }
 
 // HandleUserLogin handles a user login request.
-func (h *FormHandler[T]) HandleUserLogin(
-	w http.ResponseWriter,
-	r *http.Request,
-) (*strategy.User[T], error) {
+func (h *FormHandler[T]) HandleUserLogin(r *http.Request) (*strategy.User[T], error) {
 	form, err := h.parseUserLoginForm(r)
 	if err != nil {
 		return nil, httperror.FromError(err, http.StatusBadRequest)

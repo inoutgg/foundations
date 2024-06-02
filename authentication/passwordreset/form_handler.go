@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/go-playground/mold/v4"
-	"github.com/go-playground/validator/v10"
 	"go.inout.gg/common/authentication"
 	"go.inout.gg/common/authentication/db/driver"
 	"go.inout.gg/common/authentication/password"
@@ -23,10 +21,6 @@ const (
 // FormConfig is the configuration for form-based password reset.
 type FormConfig struct {
 	*Config
-
-	Validator    *validator.Validate
-	FormScrubber *mold.Transformer
-	FormModifier *mold.Transformer
 
 	EmailFieldName      string
 	ResetTokenFieldName string
@@ -57,18 +51,6 @@ func NewFormConfig(
 	// Set defaults.
 	if cfg.Config == nil {
 		cfg.Config = NewConfig()
-	}
-
-	if cfg.Validator == nil {
-		cfg.Validator = password.DefaultFormValidate
-	}
-
-	if cfg.FormScrubber == nil {
-		cfg.FormScrubber = password.DefaultFormScrubber
-	}
-
-	if cfg.FormModifier == nil {
-		cfg.FormModifier = password.DefaultFormModifier
 	}
 
 	return cfg
@@ -118,11 +100,11 @@ func (h *FormHandler) parsePasswordResetRequestForm(
 		Email: r.PostFormValue(h.config.EmailFieldName),
 	}
 
-	if err := h.config.FormModifier.Struct(ctx, form); err != nil {
+	if err := password.FormModifier.Struct(ctx, form); err != nil {
 		return nil, fmt.Errorf("password/reset: failed to parse request form: %w", err)
 	}
 
-	if err := h.config.Validator.Struct(form); err != nil {
+	if err := password.FormValidator.Struct(form); err != nil {
 		return nil, fmt.Errorf("password/reset: failed to parse request form: %w", err)
 	}
 
@@ -161,11 +143,11 @@ func (h *FormHandler) parsePasswordResetConfirmForm(
 		ResetToken: req.FormValue(h.config.ResetTokenFieldName),
 	}
 
-	if err := h.config.FormModifier.Struct(ctx, form); err != nil {
+	if err := password.FormModifier.Struct(ctx, form); err != nil {
 		return nil, fmt.Errorf("password/reset: failed to parse request form: %w", err)
 	}
 
-	if err := h.config.Validator.Struct(form); err != nil {
+	if err := password.FormValidator.Struct(form); err != nil {
 		return nil, fmt.Errorf("password/reset: failed to parse request form: %w", err)
 	}
 

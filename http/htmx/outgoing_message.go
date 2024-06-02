@@ -17,19 +17,30 @@ var (
 )
 
 type OutgoingMessage struct {
-	Redirect string
+	redirect string
 }
 
-func (m *OutgoingMessage) Write(w http.ResponseWriter) {}
+func (m *OutgoingMessage) Redirect(url string) { m.redirect = url }
+
+type Location struct {
+}
+
+func (m *OutgoingMessage) Location(location Location) {
+
+}
+
+func (m *OutgoingMessage) Write(w http.ResponseWriter) {
+	if m.redirect != "" {
+		w.Header().Set(HxResponseHeaderKeyRedirect, m.redirect)
+	}
+}
 
 func Redirect(w http.ResponseWriter, r *http.Request, url string, code int) {
 	incoming := FromRequest(r)
 
 	if incoming.Request {
-		outgoing := OutgoingMessage{
-			Redirect: url,
-		}
-
+		outgoing := OutgoingMessage{}
+		outgoing.Redirect(url)
 		outgoing.Write(w)
 	} else {
 		http.Redirect(w, r, url, code)
