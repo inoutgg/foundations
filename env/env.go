@@ -5,8 +5,14 @@ import (
 	"fmt"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/go-playground/validator/v10"
 	dotenv "github.com/joho/godotenv"
 	"go.inout.gg/common/must"
+)
+
+var (
+	// Validator is the default validator used to validate the configuration.
+	Validator = validator.New(validator.WithRequiredStructEnabled())
 )
 
 // Load loads the environment configuration into a struct T.
@@ -16,6 +22,8 @@ import (
 //
 // Make sure to use the `env` tag from the github.com/caarlos0/env/v11 package,
 // to specify the environment variable name.
+//
+// The populated struct is validated using `Validator`.
 func Load[T any](paths ...string) (*T, error) {
 	var config T
 
@@ -24,6 +32,10 @@ func Load[T any](paths ...string) (*T, error) {
 
 	if err := env.Parse(&config); err != nil {
 		return nil, fmt.Errorf("env: failed to load environment configuration: %w", err)
+	}
+
+	if err := Validator.Struct(config); err != nil {
+		return nil, err
 	}
 
 	return &config, nil

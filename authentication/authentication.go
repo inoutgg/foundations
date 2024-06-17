@@ -6,6 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	CredentialPassword   = "password"
+	CredentialSsoTwitter = "sso_twitter"
+	CredentialSsoGoogle  = "sso_google"
+)
+
 var (
 	ErrAuthorizedUser   = errors.New("authentication: authorized user access")
 	ErrUnauthorizedUser = errors.New("authentication: unauthorized user access")

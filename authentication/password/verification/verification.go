@@ -4,6 +4,7 @@ import (
 	"strings"
 )
 
+var _ PasswordVerifier = (*passwordVerifier)(nil)
 var _ error = (*PasswordVerificationError)(nil)
 
 type Reason string
@@ -31,12 +32,17 @@ type Option struct {
 }
 
 // PasswordVerifier verifies strongness of the password.
-type PasswordVerifier struct {
+type PasswordVerifier interface {
+	Verify(password string) error
+}
+
+// Default implementation.
+type passwordVerifier struct {
 	opt *Option
 }
 
 // New creates a new PasswordVerifier.
-func New(options ...func(*Option)) (*PasswordVerifier, error) {
+func New(options ...func(*Option)) (*passwordVerifier, error) {
 	var defaultRequiredChars PasswordRequiredChars
 	if err := defaultRequiredChars.Parse(DefaultPasswordRequiredChars); err != nil {
 		return nil, err
@@ -50,13 +56,13 @@ func New(options ...func(*Option)) (*PasswordVerifier, error) {
 		f(opt)
 	}
 
-	return &PasswordVerifier{
+	return &passwordVerifier{
 		opt,
 	}, nil
 }
 
 // Verify verifies the strongness password.
-func (v *PasswordVerifier) Verify(password string) error {
+func (v *passwordVerifier) Verify(password string) error {
 	var reasons []Reason
 	var messages []string
 

@@ -18,24 +18,24 @@ type PasswordResetToken struct {
 	UserID    pgtype.UUID
 }
 
-type SsoProviderUser struct {
-	ID             pgtype.UUID
-	CreatedAt      pgtype.Timestamp
-	UpdatedAt      pgtype.Timestamp
-	ProviderName   string
-	UserID         pgtype.UUID
-	ProviderUserID string
-}
-
 type User struct {
 	ID              pgtype.UUID
 	CreatedAt       pgtype.Timestamp
 	UpdatedAt       pgtype.Timestamp
 	Email           string
 	IsEmailVerified bool
-	PasswordHash    *string
 	FirstName       *string
 	LastName        *string
+}
+
+type UserCredential struct {
+	ID                   pgtype.UUID
+	CreatedAt            pgtype.Timestamp
+	UpdatedAt            pgtype.Timestamp
+	Name                 string
+	UserID               pgtype.UUID
+	UserCredentialKey    string
+	UserCredentialSecret string
 }
 
 type UserEmailVerificationToken struct {
@@ -54,4 +54,5 @@ type UserSession struct {
 	UpdatedAt pgtype.Timestamp
 	ExpiresAt pgtype.Timestamp
 	UserID    pgtype.UUID
+	EvictedBy pgtype.UUID
 }

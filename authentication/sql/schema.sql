@@ -4,7 +4,6 @@ CREATE TABLE users (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   email VARCHAR(255) NOT NULL,
   is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
-  password_hash VARCHAR(4095) NULL,
   first_name VARCHAR(255) NULL,
   last_name VARCHAR(255) NULL,
   PRIMARY KEY (id),
@@ -26,17 +25,19 @@ CREATE TABLE user_email_verification_tokens (
     ON DELETE CASCADE
 );
 
-CREATE TABLE sso_provider_users (
+CREATE TABLE user_credentials (
   id UUID NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  provider_name VARCHAR(255) NOT NULL,
+  name VARCHAR(255) NOT NULL,
   user_id UUID NOT NULL,
-  provider_user_id VARCHAR(255) NOT NULL, -- external user id
+  user_credential_key VARCHAR(255) NOT NULL, -- can be SSO user ID, email, etc.
+  user_credential_secret VARCHAR(4095) NOT NULL, -- can SSO token, password hash, etc.
   PRIMARY KEY (user_id, id),
-  UNIQUE (provider_name, user_id),
-  UNIQUE (provider_name, provider_user_id),
+  UNIQUE (name, user_credential_key),
+  UNIQUE (name, user_id),
   FOREIGN KEY (user_id) REFERENCES users (id)
+    ON DELETE CASCADE
 );
 
 CREATE TABLE password_reset_tokens (
@@ -62,10 +63,12 @@ CREATE TABLE user_sessions (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at TIMESTAMP NOT NULL,
   user_id UUID NOT NULL,
+  evicted_by UUID NULL,
   PRIMARY KEY (user_id, id),
   UNIQUE (id),
   FOREIGN KEY (user_id) REFERENCES users (id)
     ON DELETE CASCADE,
+  FOREIGN KEY (evicted_by) REFERENCES users (id),
   CHECK (expires_at > CURRENT_TIMESTAMP),
   CHECK (expires_at > created_at)
 );

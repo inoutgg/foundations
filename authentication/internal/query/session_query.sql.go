@@ -68,7 +68,7 @@ func (q *Queries) ExpireSessionByID(ctx context.Context, id pgtype.UUID) (pgtype
 }
 
 const findUserSessionByID = `-- name: FindUserSessionByID :one
-SELECT id, created_at, updated_at, expires_at, user_id
+SELECT id, created_at, updated_at, expires_at, user_id, evicted_by
 FROM user_sessions
 WHERE id = $1::UUID AND expires_at > NOW()
 LIMIT 1
@@ -83,6 +83,7 @@ func (q *Queries) FindUserSessionByID(ctx context.Context, id pgtype.UUID) (User
 		&i.UpdatedAt,
 		&i.ExpiresAt,
 		&i.UserID,
+		&i.EvictedBy,
 	)
 	return i, err
 }

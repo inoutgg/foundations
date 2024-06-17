@@ -13,8 +13,8 @@ import (
 	"go.inout.gg/common/authentication/internal/query"
 	"go.inout.gg/common/authentication/strategy"
 	"go.inout.gg/common/http/cookie"
+	"go.inout.gg/common/internal/uuidv7"
 	"go.inout.gg/common/sql/db/dbutil"
-	"go.inout.gg/common/uuidv7"
 )
 
 var _ strategy.Authenticator[any] = (*sessionStrategy[any])(nil)

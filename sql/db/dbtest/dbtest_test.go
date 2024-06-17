@@ -9,7 +9,7 @@ import (
 
 func TestFetchAllTables(t *testing.T) {
 	ctx := context.Background()
-	db := Must(ctx, t, MustLoadConfig())
+	db := Must(ctx, t)
 	defer db.Close()
 	t.Run("it works with empty schema", func(t *testing.T) {
 		ctx := context.Background()
@@ -46,7 +46,7 @@ func TestFetchAllTables(t *testing.T) {
 
 func TestInit(t *testing.T) {
 	ctx := context.Background()
-	db := Must(ctx, t, MustLoadConfig())
+	db := Must(ctx, t)
 	defer db.Close()
 
 	if err := db.Init(ctx); err != nil {
@@ -74,7 +74,7 @@ func count(ctx context.Context, db *DB) (int, error) {
 
 func TestTruncateTable(t *testing.T) {
 	ctx := context.Background()
-	db := Must(ctx, t, MustLoadConfig())
+	db := Must(ctx, t)
 	defer db.Close()
 	t.Run("it works", func(t *testing.T) {
 		ctx := context.Background()
@@ -108,7 +108,7 @@ func TestTruncateTable(t *testing.T) {
 
 func TestReset(t *testing.T) {
 	ctx := context.Background()
-	db := Must(ctx, t, MustLoadConfig())
+	db := Must(ctx, t)
 	defer db.Close()
 
 	if err := db.Reset(ctx); err != nil {

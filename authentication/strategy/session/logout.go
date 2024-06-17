@@ -8,7 +8,7 @@ import (
 	"go.inout.gg/common/authentication/user"
 	"go.inout.gg/common/http/cookie"
 	httperror "go.inout.gg/common/http/error"
-	"go.inout.gg/common/uuidv7"
+	"go.inout.gg/common/internal/uuidv7"
 )
 
 // LogoutHandler is a handler that logs out the user and deletes the session.

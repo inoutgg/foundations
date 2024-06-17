@@ -8,9 +8,9 @@ module.exports = {
         parser: "postgresql",
         sqlCanonicalSyntax: true,
         sqlKeywordCase: "upper",
-        sqlParamTypes: ["?", "$nr", "@name"],
-      },
-    },
+        sqlParamTypes: ["?", "$nr", "@name"]
+      }
+    }
   ],
   trailingComma: "none",
   singleQuote: false,
@@ -19,5 +19,5 @@ module.exports = {
   bracketSpacing: true,
   arrowParens: "always",
   quoteProps: "preserve",
-  endOfLine: "lf",
+  endOfLine: "lf"
 };

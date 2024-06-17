@@ -4,6 +4,7 @@ sql:
     queries:
       - "sql/query.sql"
       - "sql/session_query.sql"
+      - "sql/password_query.sql"
     engine: "postgresql"
     gen:
       go:

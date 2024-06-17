@@ -23,8 +23,7 @@ import (
 )
 
 var (
-	_, basepath, _, _ = runtime.Caller(0)
-	submodulePath     = filepath.Dir(basepath)
+	MaxConfigLookupCallerDepth = 10
 )
 
 const (
@@ -40,7 +39,7 @@ func queryTruncateTable(table string) string { return fmt.Sprintf("TRUNCATE %s;"
 func queryDropTable(
 	table string,
 ) string {
-	return fmt.Sprintf("DROP TABLE IF EXISTS %s;", table)
+	return fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE;", table)
 }
 
 type Config struct {
@@ -65,16 +64,32 @@ type Config struct {
 // It panics if there is an error loading the configuration.
 func MustLoadConfig(paths ...string) *Config {
 	if len(paths) == 0 {
-		rootpath := findModuleRoot(submodulePath)
+		callingModulePath := lookupLastCallingModulePath(4)
+
+		rootPath := findModuleRoot(callingModulePath)
 		paths = []string{
-			filepath.Join(rootpath, ".test.env"),
-			filepath.Join(submodulePath, ".test.env"),
+			filepath.Join(rootPath, ".test.env"),
+			filepath.Join(callingModulePath, ".test.env"),
 		}
 	}
 
 	config := env.MustLoad[Config](paths...)
 
 	return config
+}
+
+func lookupLastCallingModulePath(m int) string {
+	var p string
+	for i := 0; i < m; i++ {
+		_, basepath, _, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+
+		p = filepath.Dir(basepath)
+	}
+
+	return p
 }
 
 // DB is a wrapper around pgxpool.Pool with useful utilities for DB management
@@ -98,12 +113,20 @@ func makePool(ctx context.Context, cfg *Config) *pgxpool.Pool {
 	return pool
 }
 
+// Must loads the configuration from the environment and creates a new DB.
+func Must(ctx context.Context, tb testing.TB) *DB {
+	tb.Helper()
+
+	config := MustLoadConfig()
+	return MustWithConfig(ctx, tb, config)
+}
+
 // Must creates a new DB.
 //
 // It initializes a new pool with the given config.
 //
 // It panics if there is an error initializing a connection to the database.
-func Must(ctx context.Context, tb testing.TB, config *Config) *DB {
+func MustWithConfig(ctx context.Context, tb testing.TB, config *Config) *DB {
 	tb.Helper()
 
 	pool := makePool(ctx, config)

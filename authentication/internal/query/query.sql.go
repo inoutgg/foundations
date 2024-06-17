@@ -12,54 +12,22 @@ import (
 )
 
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (id, email, password_hash)
-VALUES ($1::UUID, $2, $3)
+INSERT INTO users (id, email)
+VALUES ($1::UUID, $2)
 `
 
 type CreateUserParams struct {
-	ID           pgtype.UUID
-	Email        string
-	PasswordHash *string
+	ID    pgtype.UUID
+	Email string
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
-	_, err := q.db.Exec(ctx, createUser, arg.ID, arg.Email, arg.PasswordHash)
+	_, err := q.db.Exec(ctx, createUser, arg.ID, arg.Email)
 	return err
-}
-
-const deleteExpiredPasswordResetTokens = `-- name: DeleteExpiredPasswordResetTokens :exec
-DELETE FROM password_reset_tokens WHERE expires_at < now() RETURNING id
-`
-
-func (q *Queries) DeleteExpiredPasswordResetTokens(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteExpiredPasswordResetTokens)
-	return err
-}
-
-const findPasswordResetToken = `-- name: FindPasswordResetToken :one
-SELECT id, created_at, updated_at, is_used, token, expires_at, user_id
-FROM password_reset_tokens
-WHERE token = $1
-LIMIT 1 AND expires_at > now()
-`
-
-func (q *Queries) FindPasswordResetToken(ctx context.Context, token string) (PasswordResetToken, error) {
-	row := q.db.QueryRow(ctx, findPasswordResetToken, token)
-	var i PasswordResetToken
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.IsUsed,
-		&i.Token,
-		&i.ExpiresAt,
-		&i.UserID,
-	)
-	return i, err
 }
 
 const findUserByEmail = `-- name: FindUserByEmail :one
-SELECT id, created_at, updated_at, email, is_email_verified, password_hash, first_name, last_name FROM users WHERE email = $1 LIMIT 1
+SELECT id, created_at, updated_at, email, is_email_verified, first_name, last_name FROM users WHERE email = $1 LIMIT 1
 `
 
 func (q *Queries) FindUserByEmail(ctx context.Context, email string) (User, error) {
@@ -71,7 +39,6 @@ func (q *Queries) FindUserByEmail(ctx context.Context, email string) (User, erro
 		&i.UpdatedAt,
 		&i.Email,
 		&i.IsEmailVerified,
-		&i.PasswordHash,
 		&i.FirstName,
 		&i.LastName,
 	)
@@ -79,7 +46,7 @@ func (q *Queries) FindUserByEmail(ctx context.Context, email string) (User, erro
 }
 
 const findUserByID = `-- name: FindUserByID :one
-SELECT id, created_at, updated_at, email, is_email_verified, password_hash, first_name, last_name FROM users WHERE id = $1::UUID LIMIT 1
+SELECT id, created_at, updated_at, email, is_email_verified, first_name, last_name FROM users WHERE id = $1::UUID LIMIT 1
 `
 
 func (q *Queries) FindUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -91,66 +58,10 @@ func (q *Queries) FindUserByID(ctx context.Context, id pgtype.UUID) (User, error
 		&i.UpdatedAt,
 		&i.Email,
 		&i.IsEmailVerified,
-		&i.PasswordHash,
 		&i.FirstName,
 		&i.LastName,
 	)
 	return i, err
-}
-
-const findUserBySSOProvider = `-- name: FindUserBySSOProvider :one
-SELECT user
-FROM sso_provider_users
-WHERE provider_user_id = $1 AND provider_name = $2
-LIMIT 1
-`
-
-type FindUserBySSOProviderParams struct {
-	ProviderUserID string
-	ProviderName   string
-}
-
-func (q *Queries) FindUserBySSOProvider(ctx context.Context, arg FindUserBySSOProviderParams) (interface{}, error) {
-	row := q.db.QueryRow(ctx, findUserBySSOProvider, arg.ProviderUserID, arg.ProviderName)
-	var column_1 interface{}
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
-const linkUserToSSOProvider = `-- name: LinkUserToSSOProvider :exec
-INSERT INTO sso_provider_users (id, user_id, provider_name, provider_user_id)
-VALUES
-  ($1::UUID, $2::UUID, $3, $4)
-RETURNING id
-`
-
-type LinkUserToSSOProviderParams struct {
-	ID             pgtype.UUID
-	UserID         pgtype.UUID
-	ProviderName   string
-	ProviderUserID string
-}
-
-// TODO: Is it possible to link a user to a mismatching user account?
-func (q *Queries) LinkUserToSSOProvider(ctx context.Context, arg LinkUserToSSOProviderParams) error {
-	_, err := q.db.Exec(ctx, linkUserToSSOProvider,
-		arg.ID,
-		arg.UserID,
-		arg.ProviderName,
-		arg.ProviderUserID,
-	)
-	return err
-}
-
-const markPasswordResetTokenAsUsed = `-- name: MarkPasswordResetTokenAsUsed :exec
-UPDATE password_reset_tokens
-SET is_used = TRUE
-WHERE token = $1
-`
-
-func (q *Queries) MarkPasswordResetTokenAsUsed(ctx context.Context, token string) error {
-	_, err := q.db.Exec(ctx, markPasswordResetTokenAsUsed, token)
-	return err
 }
 
 const markUserEmailVerificationTokenAsUsed = `-- name: MarkUserEmailVerificationTokenAsUsed :exec
@@ -179,22 +90,6 @@ type SetUserEmailByIDParams struct {
 
 func (q *Queries) SetUserEmailByID(ctx context.Context, arg SetUserEmailByIDParams) error {
 	_, err := q.db.Exec(ctx, setUserEmailByID, arg.Email, arg.ID)
-	return err
-}
-
-const setUserPasswordByID = `-- name: SetUserPasswordByID :exec
-UPDATE users
-SET password_hash = $1
-WHERE id = $2
-`
-
-type SetUserPasswordByIDParams struct {
-	PasswordHash *string
-	ID           pgtype.UUID
-}
-
-func (q *Queries) SetUserPasswordByID(ctx context.Context, arg SetUserPasswordByIDParams) error {
-	_, err := q.db.Exec(ctx, setUserPasswordByID, arg.PasswordHash, arg.ID)
 	return err
 }
 
@@ -233,47 +128,5 @@ func (q *Queries) UpsertEmailVerificationToken(ctx context.Context, arg UpsertEm
 	)
 	var i UpsertEmailVerificationTokenRow
 	err := row.Scan(&i.Token, &i.ID)
-	return i, err
-}
-
-const upsertPasswordResetToken = `-- name: UpsertPasswordResetToken :one
-WITH
-  token AS (
-    INSERT INTO password_reset_tokens (id, user_id, token, expires_at, is_used)
-    VALUES
-      ($1::UUID, $2, $3, $4, FALSE)
-    ON CONFLICT (user_id, is_used) DO UPDATE
-      SET expires_at = greatest(
-        excluded.expires_at,
-        password_reset_tokens.expires_at
-      )
-    RETURNING token, id, expires_at
-  )
-SELECT token, id, expires_at
-FROM token
-`
-
-type UpsertPasswordResetTokenParams struct {
-	ID        pgtype.UUID
-	UserID    pgtype.UUID
-	Token     string
-	ExpiresAt pgtype.Timestamp
-}
-
-type UpsertPasswordResetTokenRow struct {
-	Token     string
-	ID        pgtype.UUID
-	ExpiresAt pgtype.Timestamp
-}
-
-func (q *Queries) UpsertPasswordResetToken(ctx context.Context, arg UpsertPasswordResetTokenParams) (UpsertPasswordResetTokenRow, error) {
-	row := q.db.QueryRow(ctx, upsertPasswordResetToken,
-		arg.ID,
-		arg.UserID,
-		arg.Token,
-		arg.ExpiresAt,
-	)
-	var i UpsertPasswordResetTokenRow
-	err := row.Scan(&i.Token, &i.ID, &i.ExpiresAt)
 	return i, err
 }

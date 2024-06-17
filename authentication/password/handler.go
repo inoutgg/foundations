@@ -2,7 +2,6 @@ package password
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 
@@ -14,10 +13,12 @@ import (
 	"go.inout.gg/common/authentication/password/verification"
 	"go.inout.gg/common/authentication/strategy"
 	"go.inout.gg/common/authentication/user"
-	"go.inout.gg/common/pointer"
+	"go.inout.gg/common/debug"
+	"go.inout.gg/common/internal/uuidv7"
 	"go.inout.gg/common/sql/db/dbutil"
-	"go.inout.gg/common/uuidv7"
 )
+
+var d = debug.Debuglog("authentication/password")
 
 var (
 	ErrEmailAlreadyTaken = fmt.Errorf("authentication/password: email already taken")
@@ -33,7 +34,12 @@ type Config[T any] struct {
 
 type Hijacker[T any] interface {
 	HijackUserRegisteration(context.Context, uuid.UUID, pgx.Tx) (T, error)
-	HijackUserLogin(context.Context, uuid.UUID) (T, error)
+
+	// HijackUserLogin is called when a user is trying to login.
+	// Use this method to fetch additional data from the database for the user.
+	//
+	// Note that the user password is not verified at this moment yet.
+	HijackUserLogin(context.Context, uuid.UUID, pgx.Tx) (T, error)
 }
 
 // NewConfig creates a new config.
@@ -49,6 +55,9 @@ func NewConfig[T any](config ...func(*Config[T])) *Config[T] {
 	if cfg.PasswordHasher == nil {
 		cfg.PasswordHasher = DefaultPasswordHasher
 	}
+
+	debug.Assert(cfg.PasswordHasher != nil, "PasswordHasher must be set")
+	debug.Assert(cfg.Logger != nil, "Logger must be set")
 
 	return &cfg
 }
@@ -105,6 +114,7 @@ func (h *Handler[T]) HandleUserRegistration(
 	// An entry point for hijacking the user registration process.
 	var payload T
 	if h.config.Hijacker != nil {
+		d("registration hijacking is enabled, trying to get payload")
 		payload, err = h.config.Hijacker.HijackUserRegisteration(ctx, uid, tx.Tx())
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -132,14 +142,22 @@ func (h *Handler[T]) handleUserRegistrationTx(
 	uid := uuidv7.Must()
 	q := tx.Queries()
 	if err := q.CreateUser(ctx, query.CreateUserParams{
-		ID:           uuidv7.ToPgxUUID(uid),
-		Email:        email,
-		PasswordHash: pointer.FromValue(passwordHash),
+		ID:    uuidv7.ToPgxUUID(uid),
+		Email: email,
 	}); err != nil {
 		if dbutil.IsUniqueViolationError(err) {
 			return uid, ErrEmailAlreadyTaken
 		}
 
+		return uid, fmt.Errorf("authentication/password: failed to register a user: %w", err)
+	}
+
+	if err := q.CreateUserPasswordCredential(ctx, query.CreateUserPasswordCredentialParams{
+		ID:                   uuidv7.ToPgxUUID(uuidv7.Must()),
+		UserID:               uuidv7.ToPgxUUID(uid),
+		UserCredentialKey:    email,
+		UserCredentialSecret: passwordHash,
+	}); err != nil {
 		return uid, fmt.Errorf("authentication/password: failed to register a user: %w", err)
 	}
 
@@ -155,39 +173,38 @@ func (h *Handler[T]) HandleUserLogin(
 		return nil, authentication.ErrAuthorizedUser
 	}
 
-	q := h.driver.Queries()
-
-	user, err := q.FindUserByEmail(ctx, email)
+	tx, err := h.driver.Begin(ctx)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("authentication/password: failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	q := tx.Queries()
+	user, err := q.FindUserWithPasswordCredentialByEmail(
+		ctx,
+		email,
+	)
+	if err != nil {
+		if dbutil.IsNotFoundError(err) {
 			return nil, authentication.ErrUserNotFound
 		}
 
 		return nil, fmt.Errorf("authentication/password: failed to find user: %w", err)
 	}
 
-	uuidv7.MustFromPgxUUID(user.ID)
-
-	passwordHash := pointer.ToValue(user.PasswordHash, "")
-	if passwordHash == "" {
+	// Treat the empty password as a non-existing user/credential.
+	if user.PasswordHash == "" {
+		d("empty password in db")
 		return nil, authentication.ErrUserNotFound
 	}
 
-	ok, err := h.config.PasswordHasher.Verify(passwordHash, password)
-	if err != nil {
-		return nil, fmt.Errorf("authentication/password: failed to validate password: %w", err)
-	}
+	uid := uuidv7.MustFromPgxUUID(user.ID)
 
-	if !ok {
-		return nil, ErrPasswordIncorrect
-	}
-
-	userID := uuidv7.MustFromPgxUUID(user.ID)
-
-	// An entry point for hijacking the user registration process.
+	// An entry point for hijacking the user login process.
 	var payload T
 	if h.config.Hijacker != nil {
-		payload, err = h.config.Hijacker.HijackUserLogin(ctx, userID)
+		d("login hijacking is enabled, trying to get payload")
+		payload, err = h.config.Hijacker.HijackUserLogin(ctx, uid, tx.Tx())
 		if err != nil {
 			return nil, fmt.Errorf(
 				"authentication/password: failed to hijack user login: %w",
@@ -196,8 +213,23 @@ func (h *Handler[T]) HandleUserLogin(
 		}
 	}
 
+	// Make sure that the password hashing is performed outside of the transaction.
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("authentication/password: failed to login a user: %w", err)
+	}
+
+	ok, err := h.config.PasswordHasher.Verify(user.PasswordHash, password)
+	if err != nil {
+		return nil, fmt.Errorf("authentication/password: failed to verify password: %w", err)
+	}
+
+	if !ok {
+		d("password mismatch")
+		return nil, ErrPasswordIncorrect
+	}
+
 	return &strategy.User[T]{
-		ID: userID,
+		ID: uid,
 		T:  payload,
 	}, nil
 }

@@ -14,10 +14,10 @@ import (
 	"go.inout.gg/common/authentication/password"
 	"go.inout.gg/common/authentication/sender"
 	"go.inout.gg/common/authentication/user"
+	"go.inout.gg/common/debug"
+	"go.inout.gg/common/internal/uuidv7"
 	"go.inout.gg/common/must"
-	"go.inout.gg/common/pointer"
 	"go.inout.gg/common/random"
-	"go.inout.gg/common/uuidv7"
 )
 
 var (
@@ -60,6 +60,9 @@ func NewConfig(config ...func(*Config)) *Config {
 	if cfg.PasswordHasher == nil {
 		cfg.PasswordHasher = password.DefaultPasswordHasher
 	}
+
+	debug.Assert(cfg.PasswordHasher != nil, "password hasher should be set")
+	debug.Assert(cfg.Logger != nil, "logger should be set")
 
 	return &cfg
 }
@@ -187,9 +190,10 @@ func (h *Handler) HandlePasswordResetConfirm(
 		return fmt.Errorf("password/reset: failed to mark password reset token as used: %w", err)
 	}
 
-	if err := q.SetUserPasswordByID(ctx, query.SetUserPasswordByIDParams{
-		ID:           tok.UserID,
-		PasswordHash: pointer.FromValue(passwordHash),
+	if err := q.UpsertPasswordCredentialByUserID(ctx, query.UpsertPasswordCredentialByUserIDParams{
+		ID:                   tok.UserID,
+		UserCredentialKey:    user.Email,
+		UserCredentialSecret: passwordHash,
 	}); err != nil {
 		return fmt.Errorf("password/reset: failed to set user password: %w", err)
 	}
