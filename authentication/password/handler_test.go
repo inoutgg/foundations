@@ -69,11 +69,9 @@ func TestUserRegistration(t *testing.T) {
 		)
 	})
 
-	// t.Run("user already exists", func(t *testing.T) {
-	// 	must.Must1(db.Reset(ctx))
-	//
-	// 	// TODO: implement
-	// })
+	t.Run("user already exists", func(t *testing.T) {
+		must.Must1(db.Reset(ctx))
+	})
 }
 
 func TestUserLogin(t *testing.T) {
@@ -81,6 +79,6 @@ func TestUserLogin(t *testing.T) {
 	db := dbtest.Must(ctx, t)
 
 	t.Run("user not found", func(t *testing.T) {
-		defer db.TruncateAllTables(ctx)
+		must.Must1(db.Reset(ctx))
 	})
 }

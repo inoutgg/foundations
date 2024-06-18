@@ -1,4 +1,9 @@
 // Package dbtesting providers utilities for testing database related code.
+//
+// It provides a set of utility functions to initialize a database pool,
+// load DLL schema, clean it up, etc.
+//
+// Note the package is intended to be used only within testing files.
 package dbtest
 
 import (
@@ -8,7 +13,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -20,10 +24,6 @@ import (
 	"github.com/samber/lo"
 	"go.inout.gg/common/env"
 	"go.inout.gg/common/must"
-)
-
-var (
-	MaxConfigLookupCallerDepth = 10
 )
 
 const (
@@ -58,38 +58,24 @@ type Config struct {
 
 // MustLoadConfig loads the configuration from the environment.
 //
-// If no paths are provided, it defaults to ".test.env" in the current module path
+// If no paths are provided, it defaults to ".test.env" in the current
+// working directory (which for tests is the directory in which they are located at),
 // and in the root of the project.
 //
 // It panics if there is an error loading the configuration.
 func MustLoadConfig(paths ...string) *Config {
 	if len(paths) == 0 {
-		callingModulePath := lookupLastCallingModulePath(4)
-
-		rootPath := findModuleRoot(callingModulePath)
+		currentModulePath := must.Must(os.Getwd())
+		rootPath := findModuleRoot(currentModulePath)
 		paths = []string{
 			filepath.Join(rootPath, ".test.env"),
-			filepath.Join(callingModulePath, ".test.env"),
+			filepath.Join(currentModulePath, ".test.env"),
 		}
 	}
 
 	config := env.MustLoad[Config](paths...)
 
 	return config
-}
-
-func lookupLastCallingModulePath(m int) string {
-	var p string
-	for i := 0; i < m; i++ {
-		_, basepath, _, ok := runtime.Caller(i)
-		if !ok {
-			break
-		}
-
-		p = filepath.Dir(basepath)
-	}
-
-	return p
 }
 
 // DB is a wrapper around pgxpool.Pool with useful utilities for DB management
