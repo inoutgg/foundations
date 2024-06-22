@@ -1,3 +1,4 @@
+// Package must provides a convenient way to panic on errors.
 package must
 
 // Must1 panics if err is not nil.
