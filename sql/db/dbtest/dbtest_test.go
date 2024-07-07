@@ -5,19 +5,20 @@ import (
 	"context"
 	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestFetchAllTables(t *testing.T) {
 	ctx := context.Background()
 	db := Must(ctx, t)
 	defer db.Close()
+
 	t.Run("it works with empty schema", func(t *testing.T) {
 		ctx := context.Background()
 
 		tables, err := db.fetchAllTables(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		slices.Equal([]string{}, tables)
 	})
@@ -25,19 +26,13 @@ func TestFetchAllTables(t *testing.T) {
 	t.Run("it works with a schema", func(t *testing.T) {
 		ctx := context.Background()
 		content, err := readFile("fixtures/schema.sql")
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		_, err = db.pool.Exec(ctx, content)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		tables, err := db.fetchAllTables(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		expectedTables := []string{"tests"}
 		sliceUnorderedEqual(expectedTables, tables)
@@ -49,14 +44,11 @@ func TestInit(t *testing.T) {
 	db := Must(ctx, t)
 	defer db.Close()
 
-	if err := db.Init(ctx); err != nil {
-		t.Fatal(err)
-	}
+	err := db.Init(ctx)
+	require.NoError(t, err)
 
 	resultedTables, err := db.fetchAllTables(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	expectedTables := []string{"tests"}
 	sliceUnorderedEqual(expectedTables, resultedTables)
@@ -78,31 +70,24 @@ func TestTruncateTable(t *testing.T) {
 	defer db.Close()
 	t.Run("it works", func(t *testing.T) {
 		ctx := context.Background()
-		if err := db.Init(ctx); err != nil {
-			t.Fatal(err)
-		}
+		err := db.Init(ctx)
+		require.NoError(t, err)
 
-		if _, err := db.pool.Exec(ctx, "INSERT INTO tests (id, name) VALUES (1, 'foo')"); err != nil {
-			t.Fatal(err)
-		}
+		_, err = db.pool.Exec(ctx, "INSERT INTO tests (id, name) VALUES (1, 'foo')")
+		require.NoError(t, err)
 
 		c, err := count(ctx, db)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		if c != 1 {
 			t.Fatalf("expected count to be 1, got %d", c)
 		}
 
-		if err := db.TruncateTable(ctx, "tests"); err != nil {
-			t.Fatal(err)
-		}
+		err = db.TruncateTable(ctx, "tests")
+		require.NoError(t, err)
 
 		c, err = count(ctx, db)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 	})
 }
 
@@ -111,14 +96,11 @@ func TestReset(t *testing.T) {
 	db := Must(ctx, t)
 	defer db.Close()
 
-	if err := db.Reset(ctx); err != nil {
-		t.Fatal(err)
-	}
+	err := db.Reset(ctx)
+	require.NoError(t, err)
 
 	resultedTables, err := db.fetchAllTables(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	expectedTables := []string{"tests"}
 	sliceUnorderedEqual(expectedTables, resultedTables)

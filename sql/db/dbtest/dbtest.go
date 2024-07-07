@@ -24,6 +24,7 @@ import (
 	"github.com/samber/lo"
 	"go.inout.gg/common/env"
 	"go.inout.gg/common/must"
+	"go.inout.gg/common/sql/db/pgxuuid"
 )
 
 const (
@@ -54,6 +55,8 @@ type Config struct {
 
 	// FilePath is the path to the DDL file.
 	FilePath []string `env:"DB_SCHEMA_PATH" envSeparator:","`
+
+	AfterConnect func(context.Context, *pgx.Conn) error `env:"-"`
 }
 
 // MustLoadConfig loads the configuration from the environment.
@@ -92,6 +95,17 @@ func makePool(ctx context.Context, cfg *Config) *pgxpool.Pool {
 	defer cancel()
 
 	config := must.Must(pgxpool.ParseConfig(cfg.DatabaseURI))
+	config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		// UUID is common enough to be registered by default.
+		pgxuuid.Register(conn.TypeMap())
+
+		if cfg.AfterConnect != nil {
+			return cfg.AfterConnect(ctx, conn)
+		}
+
+		return nil
+	}
+
 	pool := must.Must(pgxpool.NewWithConfig(ctx, config))
 
 	must.Must1(pool.Ping(ctx))
