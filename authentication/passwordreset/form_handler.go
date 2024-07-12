@@ -38,7 +38,6 @@ func NewFormConfig(
 	config ...func(*FormConfig),
 ) *FormConfig {
 	cfg := &FormConfig{
-
 		EmailFieldName:      FieldNameEmail,
 		ResetTokenFieldName: FieldNameResetToken,
 		PasswordFieldName:   FieldNamePassword,

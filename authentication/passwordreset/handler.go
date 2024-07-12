@@ -62,7 +62,6 @@ func NewConfig(config ...func(*Config)) *Config {
 	}
 
 	debug.Assert(cfg.PasswordHasher != nil, "password hasher should be set")
-	debug.Assert(cfg.Logger != nil, "logger should be set")
 
 	return &cfg
 }

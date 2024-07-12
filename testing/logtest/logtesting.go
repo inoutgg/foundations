@@ -1,3 +1,0 @@
-package logtesting
-
-func NewLogger() {}
