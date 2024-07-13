@@ -8,7 +8,6 @@ import (
 	"go.inout.gg/common/authentication/user"
 	"go.inout.gg/common/http/cookie"
 	httperror "go.inout.gg/common/http/error"
-	"go.inout.gg/common/internal/uuidv7"
 )
 
 // LogoutHandler is a handler that logs out the user and deletes the session.
@@ -30,7 +29,7 @@ func (h *LogoutHandler) HandleLogout(w http.ResponseWriter, r *http.Request) err
 		return httperror.FromError(authentication.ErrUnauthorizedUser, http.StatusUnauthorized)
 	}
 
-	if _, err := q.ExpireSessionByID(ctx, uuidv7.ToPgxUUID(usr.ID)); err != nil {
+	if _, err := q.ExpireSessionByID(ctx, usr.ID); err != nil {
 		return httperror.FromError(err, http.StatusInternalServerError)
 	}
 

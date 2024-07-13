@@ -141,7 +141,7 @@ func (h *Handler[T]) handleUserRegistrationTx(
 	uid := uuidv7.Must()
 	q := tx.Queries()
 	if err := q.CreateUser(ctx, query.CreateUserParams{
-		ID:    uuidv7.ToPgxUUID(uid),
+		ID:    uid,
 		Email: email,
 	}); err != nil {
 		if dbutil.IsUniqueViolationError(err) {
@@ -152,8 +152,8 @@ func (h *Handler[T]) handleUserRegistrationTx(
 	}
 
 	if err := q.CreateUserPasswordCredential(ctx, query.CreateUserPasswordCredentialParams{
-		ID:                   uuidv7.ToPgxUUID(uuidv7.Must()),
-		UserID:               uuidv7.ToPgxUUID(uid),
+		ID:                   uuidv7.Must(),
+		UserID:               uid,
 		UserCredentialKey:    email,
 		UserCredentialSecret: passwordHash,
 	}); err != nil {
@@ -197,13 +197,11 @@ func (h *Handler[T]) HandleUserLogin(
 		return nil, authentication.ErrUserNotFound
 	}
 
-	uid := uuidv7.MustFromPgxUUID(user.ID)
-
 	// An entry point for hijacking the user login process.
 	var payload T
 	if h.config.Hijacker != nil {
 		d("login hijacking is enabled, trying to get payload")
-		payload, err = h.config.Hijacker.HijackUserLogin(ctx, uid, tx.Tx())
+		payload, err = h.config.Hijacker.HijackUserLogin(ctx, user.ID, tx.Tx())
 		if err != nil {
 			return nil, fmt.Errorf(
 				"authentication/password: failed to hijack user login: %w",
@@ -228,7 +226,7 @@ func (h *Handler[T]) HandleUserLogin(
 	}
 
 	return &strategy.User[T]{
-		ID: uid,
+		ID: user.ID,
 		T:  payload,
 	}, nil
 }

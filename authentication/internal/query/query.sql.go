@@ -8,7 +8,7 @@ package query
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 )
 
 const createUser = `-- name: CreateUser :exec
@@ -17,7 +17,7 @@ VALUES ($1::UUID, $2)
 `
 
 type CreateUserParams struct {
-	ID    pgtype.UUID
+	ID    uuid.UUID
 	Email string
 }
 
@@ -49,7 +49,7 @@ const findUserByID = `-- name: FindUserByID :one
 SELECT id, created_at, updated_at, email, is_email_verified, first_name, last_name FROM users WHERE id = $1::UUID LIMIT 1
 `
 
-func (q *Queries) FindUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
+func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	row := q.db.QueryRow(ctx, findUserByID, id)
 	var i User
 	err := row.Scan(
@@ -85,7 +85,7 @@ WHERE id = $2
 
 type SetUserEmailByIDParams struct {
 	Email string
-	ID    pgtype.UUID
+	ID    uuid.UUID
 }
 
 func (q *Queries) SetUserEmailByID(ctx context.Context, arg SetUserEmailByIDParams) error {
@@ -108,15 +108,15 @@ FROM token
 `
 
 type UpsertEmailVerificationTokenParams struct {
-	ID        pgtype.UUID
-	UserID    pgtype.UUID
+	ID        uuid.UUID
+	UserID    uuid.UUID
 	Token     string
 	ExpiresAt bool
 }
 
 type UpsertEmailVerificationTokenRow struct {
 	Token string
-	ID    pgtype.UUID
+	ID    uuid.UUID
 }
 
 func (q *Queries) UpsertEmailVerificationToken(ctx context.Context, arg UpsertEmailVerificationTokenParams) (UpsertEmailVerificationTokenRow, error) {

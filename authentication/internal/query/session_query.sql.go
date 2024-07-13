@@ -8,6 +8,7 @@ package query
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -18,14 +19,14 @@ RETURNING id
 `
 
 type CreateUserSessionParams struct {
-	ID        pgtype.UUID
-	UserID    pgtype.UUID
+	ID        uuid.UUID
+	UserID    uuid.UUID
 	ExpiresAt pgtype.Timestamp
 }
 
-func (q *Queries) CreateUserSession(ctx context.Context, arg CreateUserSessionParams) (pgtype.UUID, error) {
+func (q *Queries) CreateUserSession(ctx context.Context, arg CreateUserSessionParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createUserSession, arg.ID, arg.UserID, arg.ExpiresAt)
-	var id pgtype.UUID
+	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
 }
@@ -37,15 +38,15 @@ WHERE user_id = $1::UUID
 RETURNING id
 `
 
-func (q *Queries) ExpireAllSessionsByUserID(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+func (q *Queries) ExpireAllSessionsByUserID(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, expireAllSessionsByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []pgtype.UUID
+	var items []uuid.UUID
 	for rows.Next() {
-		var id pgtype.UUID
+		var id uuid.UUID
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
@@ -61,7 +62,7 @@ const expireSessionByID = `-- name: ExpireSessionByID :one
 UPDATE user_sessions SET expires_at = NOW() WHERE id = $1::UUID RETURNING id
 `
 
-func (q *Queries) ExpireSessionByID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+func (q *Queries) ExpireSessionByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, expireSessionByID, id)
 	err := row.Scan(&id)
 	return id, err
@@ -74,7 +75,7 @@ WHERE id = $1::UUID AND expires_at > NOW()
 LIMIT 1
 `
 
-func (q *Queries) FindUserSessionByID(ctx context.Context, id pgtype.UUID) (UserSession, error) {
+func (q *Queries) FindUserSessionByID(ctx context.Context, id uuid.UUID) (UserSession, error) {
 	row := q.db.QueryRow(ctx, findUserSessionByID, id)
 	var i UserSession
 	err := row.Scan(

@@ -8,6 +8,7 @@ package query
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -25,9 +26,9 @@ VALUES
 `
 
 type CreateUserPasswordCredentialParams struct {
-	ID                   pgtype.UUID
+	ID                   uuid.UUID
 	Name                 string
-	UserID               pgtype.UUID
+	UserID               uuid.UUID
 	UserCredentialKey    string
 	UserCredentialSecret string
 }
@@ -95,7 +96,7 @@ FROM
 `
 
 type FindUserWithPasswordCredentialByEmailRow struct {
-	ID              pgtype.UUID
+	ID              uuid.UUID
 	CreatedAt       pgtype.Timestamp
 	UpdatedAt       pgtype.Timestamp
 	Email           string
@@ -154,8 +155,8 @@ FROM credential
 `
 
 type UpsertPasswordCredentialByUserIDParams struct {
-	ID                   pgtype.UUID
-	UserID               pgtype.UUID
+	ID                   uuid.UUID
+	UserID               uuid.UUID
 	UserCredentialKey    string
 	UserCredentialSecret string
 }
@@ -188,15 +189,15 @@ FROM token
 `
 
 type UpsertPasswordResetTokenParams struct {
-	ID        pgtype.UUID
-	UserID    pgtype.UUID
+	ID        uuid.UUID
+	UserID    uuid.UUID
 	Token     string
 	ExpiresAt pgtype.Timestamp
 }
 
 type UpsertPasswordResetTokenRow struct {
 	Token     string
-	ID        pgtype.UUID
+	ID        uuid.UUID
 	ExpiresAt pgtype.Timestamp
 }
 

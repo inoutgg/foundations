@@ -63,8 +63,8 @@ func (s *sessionStrategy[T]) Issue(
 	sessionID := uuidv7.Must()
 	expiresAt := time.Now().Add(s.config.ExpiresIn)
 	_, err := q.CreateUserSession(ctx, query.CreateUserSessionParams{
-		ID:        uuidv7.ToPgxUUID(sessionID),
-		UserID:    uuidv7.ToPgxUUID(user.ID),
+		ID:        sessionID,
+		UserID:    user.ID,
 		ExpiresAt: pgtype.Timestamp{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
@@ -116,7 +116,7 @@ func (s *sessionStrategy[T]) Authenticate(
 
 	q := tx.Queries()
 
-	session, err := q.FindUserSessionByID(ctx, uuidv7.ToPgxUUID(sessionID))
+	session, err := q.FindUserSessionByID(ctx, sessionID)
 	if err != nil {
 		if dbutil.IsNotFoundError(err) {
 			s.config.Logger.Error(
@@ -143,7 +143,7 @@ func (s *sessionStrategy[T]) Authenticate(
 	}
 
 	return &strategy.Session[T]{
-		ID:        uuidv7.MustFromPgxUUID(session.ID),
+		ID:        session.ID,
 		ExpiresAt: session.ExpiresAt.Time,
 		T:         nil,
 	}, nil
