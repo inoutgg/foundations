@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS migrations (
+  id UUID NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  version BIGINT NOT NULL,
+  name VARCHAR(4095),
+  namespace VARCHAR(4095),
+  PRIMARY KEY (id),
+  UNIQUE (version, namespace)
+);

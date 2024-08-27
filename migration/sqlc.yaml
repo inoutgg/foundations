@@ -1,16 +1,14 @@
 version: "2"
 sql:
-  - schema: "sql/schema.sql"
+  - schema: "internal/dbsqlc/schema.sql"
     queries:
-      - "sql/query.sql"
-      - "sql/session_query.sql"
-      - "sql/password_query.sql"
+      - "internal/dbsqlc/query.sql"
     engine: "postgresql"
     gen:
       go:
-        package: "query"
+        package: "dbsqlc"
         sql_package: "pgx/v5"
-        out: "internal/query"
+        out: "internal/dbsqlc"
         emit_pointers_for_null_types: true
         overrides:
           - db_type: "uuid"
