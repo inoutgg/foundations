@@ -7,7 +7,7 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/go-playground/validator/v10"
 	dotenv "github.com/joho/godotenv"
-	"go.inout.gg/common/must"
+	"go.inout.gg/foundations/must"
 )
 
 var (

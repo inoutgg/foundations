@@ -3,7 +3,7 @@ package errorhandler
 import (
 	"net/http"
 
-	httperror "go.inout.gg/common/http/error"
+	httperror "go.inout.gg/foundations/http/error"
 )
 
 var _ Handler = (HandlerFunc)(nil)

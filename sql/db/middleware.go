@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.inout.gg/common/http/middleware"
+	"go.inout.gg/foundations/http/middleware"
 )
 
 // FromRequest returns the pool associated with the given http request.

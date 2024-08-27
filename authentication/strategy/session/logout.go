@@ -3,11 +3,11 @@ package session
 import (
 	"net/http"
 
-	"go.inout.gg/common/authentication"
-	"go.inout.gg/common/authentication/db/driver"
-	"go.inout.gg/common/authentication/user"
-	"go.inout.gg/common/http/cookie"
-	httperror "go.inout.gg/common/http/error"
+	"go.inout.gg/foundations/authentication"
+	"go.inout.gg/foundations/authentication/db/driver"
+	"go.inout.gg/foundations/authentication/user"
+	"go.inout.gg/foundations/http/cookie"
+	httperror "go.inout.gg/foundations/http/error"
 )
 
 // LogoutHandler is a handler that logs out the user and deletes the session.

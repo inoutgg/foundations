@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.inout.gg/common/authentication/db/driver"
-	"go.inout.gg/common/authentication/internal/query"
+	"go.inout.gg/foundations/authentication/db/driver"
+	"go.inout.gg/foundations/authentication/internal/query"
 )
 
 var _ driver.Driver = (*pgxDriver)(nil)

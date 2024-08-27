@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"go.inout.gg/common/must"
+	"go.inout.gg/foundations/must"
 )
 
 var checksumSecret = "really-long-and-super-protected-checksum-secret"

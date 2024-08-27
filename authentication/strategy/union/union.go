@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"go.inout.gg/common/authentication/strategy"
+	"go.inout.gg/foundations/authentication/strategy"
 )
 
 var _ strategy.Authenticator[any] = (unionStrategy[any])(nil)

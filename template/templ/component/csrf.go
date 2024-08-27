@@ -5,7 +5,7 @@ import (
 	"io"
 
 	"github.com/a-h/templ"
-	"go.inout.gg/common/authentication/csrf"
+	"go.inout.gg/foundations/authentication/csrf"
 )
 
 // CsrfToken returns a component that renders a CSRF token as an input field.

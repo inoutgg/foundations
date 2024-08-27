@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.inout.gg/common/sql/db/dbtest"
+	"go.inout.gg/foundations/sql/db/dbtest"
 )
 
 func TestCodecDecodeValue(t *testing.T) {

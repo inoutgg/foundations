@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
-	"go.inout.gg/common/authentication/internal/query"
+	"go.inout.gg/foundations/authentication/internal/query"
 )
 
 type Querier interface {

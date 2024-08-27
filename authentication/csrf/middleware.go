@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"slices"
 
-	httperror "go.inout.gg/common/http/error"
-	"go.inout.gg/common/http/errorhandler"
-	"go.inout.gg/common/http/middleware"
+	httperror "go.inout.gg/foundations/http/error"
+	"go.inout.gg/foundations/http/errorhandler"
+	"go.inout.gg/foundations/http/middleware"
 )
 
 type ctxKey struct{}

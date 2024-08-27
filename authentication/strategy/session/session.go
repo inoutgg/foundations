@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"go.inout.gg/common/authentication"
-	"go.inout.gg/common/authentication/db/driver"
-	"go.inout.gg/common/authentication/internal/query"
-	"go.inout.gg/common/authentication/strategy"
-	"go.inout.gg/common/http/cookie"
-	"go.inout.gg/common/internal/uuidv7"
-	"go.inout.gg/common/sql/db/dbutil"
+	"go.inout.gg/foundations/authentication"
+	"go.inout.gg/foundations/authentication/db/driver"
+	"go.inout.gg/foundations/authentication/internal/query"
+	"go.inout.gg/foundations/authentication/strategy"
+	"go.inout.gg/foundations/http/cookie"
+	"go.inout.gg/foundations/internal/uuidv7"
+	"go.inout.gg/foundations/sql/db/dbutil"
 )
 
 var _ strategy.Authenticator[any] = (*sessionStrategy[any])(nil)

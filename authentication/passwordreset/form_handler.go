@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"go.inout.gg/common/authentication"
-	"go.inout.gg/common/authentication/db/driver"
-	"go.inout.gg/common/authentication/password"
-	"go.inout.gg/common/authentication/sender"
-	httperror "go.inout.gg/common/http/error"
+	"go.inout.gg/foundations/authentication"
+	"go.inout.gg/foundations/authentication/db/driver"
+	"go.inout.gg/foundations/authentication/password"
+	"go.inout.gg/foundations/authentication/sender"
+	httperror "go.inout.gg/foundations/http/error"
 )
 
 const (

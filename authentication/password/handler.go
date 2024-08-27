@@ -7,15 +7,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"go.inout.gg/common/authentication"
-	"go.inout.gg/common/authentication/db/driver"
-	"go.inout.gg/common/authentication/internal/query"
-	"go.inout.gg/common/authentication/password/verification"
-	"go.inout.gg/common/authentication/strategy"
-	"go.inout.gg/common/authentication/user"
-	"go.inout.gg/common/debug"
-	"go.inout.gg/common/internal/uuidv7"
-	"go.inout.gg/common/sql/db/dbutil"
+	"go.inout.gg/foundations/authentication"
+	"go.inout.gg/foundations/authentication/db/driver"
+	"go.inout.gg/foundations/authentication/internal/query"
+	"go.inout.gg/foundations/authentication/password/verification"
+	"go.inout.gg/foundations/authentication/strategy"
+	"go.inout.gg/foundations/authentication/user"
+	"go.inout.gg/foundations/debug"
+	"go.inout.gg/foundations/internal/uuidv7"
+	"go.inout.gg/foundations/sql/db/dbutil"
 )
 
 var d = debug.Debuglog("authentication/password")

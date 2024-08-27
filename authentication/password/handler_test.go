@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.inout.gg/common/authentication/db/driverpgxv5"
-	"go.inout.gg/common/must"
-	"go.inout.gg/common/sql/db/dbtest"
+	"go.inout.gg/foundations/authentication/db/driverpgxv5"
+	"go.inout.gg/foundations/must"
+	"go.inout.gg/foundations/sql/db/dbtest"
 )
 
 func TestUserRegistration(t *testing.T) {

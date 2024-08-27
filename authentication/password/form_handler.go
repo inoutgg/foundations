@@ -8,10 +8,10 @@ import (
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/mold/v4/scrubbers"
 	"github.com/go-playground/validator/v10"
-	"go.inout.gg/common/authentication"
-	"go.inout.gg/common/authentication/db/driver"
-	"go.inout.gg/common/authentication/strategy"
-	httperror "go.inout.gg/common/http/error"
+	"go.inout.gg/foundations/authentication"
+	"go.inout.gg/foundations/authentication/db/driver"
+	"go.inout.gg/foundations/authentication/strategy"
+	httperror "go.inout.gg/foundations/http/error"
 )
 
 var (

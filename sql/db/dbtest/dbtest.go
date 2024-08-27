@@ -22,9 +22,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/samber/lo"
-	"go.inout.gg/common/env"
-	"go.inout.gg/common/must"
-	"go.inout.gg/common/sql/db/pgxuuid"
+	"go.inout.gg/foundations/env"
+	"go.inout.gg/foundations/must"
+	"go.inout.gg/foundations/sql/db/pgxuuid"
 )
 
 const (

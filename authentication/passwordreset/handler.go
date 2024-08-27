@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"go.inout.gg/common/authentication"
-	"go.inout.gg/common/authentication/db/driver"
-	"go.inout.gg/common/authentication/internal/query"
-	"go.inout.gg/common/authentication/password"
-	"go.inout.gg/common/authentication/sender"
-	"go.inout.gg/common/authentication/user"
-	"go.inout.gg/common/debug"
-	"go.inout.gg/common/internal/uuidv7"
-	"go.inout.gg/common/must"
-	"go.inout.gg/common/random"
+	"go.inout.gg/foundations/authentication"
+	"go.inout.gg/foundations/authentication/db/driver"
+	"go.inout.gg/foundations/authentication/internal/query"
+	"go.inout.gg/foundations/authentication/password"
+	"go.inout.gg/foundations/authentication/sender"
+	"go.inout.gg/foundations/authentication/user"
+	"go.inout.gg/foundations/debug"
+	"go.inout.gg/foundations/internal/uuidv7"
+	"go.inout.gg/foundations/must"
+	"go.inout.gg/foundations/random"
 )
 
 var (

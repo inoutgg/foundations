@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/coreos/go-oidc/v3/oidc"
-	"go.inout.gg/common/authentication/sso"
+	"go.inout.gg/foundations/authentication/sso"
 	"golang.org/x/oauth2"
 )
 

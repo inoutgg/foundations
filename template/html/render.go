@@ -5,7 +5,7 @@ import (
 	"io"
 	"io/fs"
 
-	"go.inout.gg/common/template/html/engine"
+	"go.inout.gg/foundations/template/html/engine"
 )
 
 // Renderer renders a template using provided underlying engine.

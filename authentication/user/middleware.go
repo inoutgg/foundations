@@ -6,11 +6,11 @@ import (
 
 	"log/slog"
 
-	"go.inout.gg/common/authentication/strategy"
-	httperror "go.inout.gg/common/http/error"
-	"go.inout.gg/common/http/errorhandler"
-	"go.inout.gg/common/http/htmx"
-	"go.inout.gg/common/http/middleware"
+	"go.inout.gg/foundations/authentication/strategy"
+	httperror "go.inout.gg/foundations/http/error"
+	"go.inout.gg/foundations/http/errorhandler"
+	"go.inout.gg/foundations/http/htmx"
+	"go.inout.gg/foundations/http/middleware"
 )
 
 type ctxKey struct{}

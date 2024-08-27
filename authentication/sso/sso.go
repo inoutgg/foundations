@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"go.inout.gg/common/must"
-	"go.inout.gg/common/random"
+	"go.inout.gg/foundations/must"
+	"go.inout.gg/foundations/random"
 	"golang.org/x/oauth2"
 )
 

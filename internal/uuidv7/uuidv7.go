@@ -3,7 +3,7 @@ package uuidv7
 
 import (
 	"github.com/google/uuid"
-	"go.inout.gg/common/must"
+	"go.inout.gg/foundations/must"
 )
 
 // Must returns a new random UUID. It panics if there is an error.

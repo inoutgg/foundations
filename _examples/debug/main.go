@@ -4,7 +4,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
-	"go.inout.gg/common/debug"
+	"go.inout.gg/foundations/debug"
 )
 
 var d = debug.Debuglog("main")

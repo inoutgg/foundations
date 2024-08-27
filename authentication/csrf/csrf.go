@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"go.inout.gg/common/random"
+	"go.inout.gg/foundations/random"
 )
 
 var (

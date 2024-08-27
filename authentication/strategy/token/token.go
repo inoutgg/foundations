@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"go.inout.gg/common/authentication/strategy"
-	"go.inout.gg/common/authentication/token"
+	"go.inout.gg/foundations/authentication/strategy"
+	"go.inout.gg/foundations/authentication/token"
 )
 
 var _ strategy.Authenticator[any] = (*tokenStrategy[any])(nil)

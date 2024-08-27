@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	httperror "go.inout.gg/common/http/error"
-	"go.inout.gg/common/token"
+	httperror "go.inout.gg/foundations/http/error"
+	"go.inout.gg/foundations/token"
 )
 
 var (

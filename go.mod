@@ -1,4 +1,4 @@
-module go.inout.gg/common
+module go.inout.gg/foundations
 
 go 1.21.1
 

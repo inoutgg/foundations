@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"go.inout.gg/common/http/middleware"
-	"go.inout.gg/common/must"
+	"go.inout.gg/foundations/http/middleware"
+	"go.inout.gg/foundations/must"
 )
 
 type ctxKey struct{}
