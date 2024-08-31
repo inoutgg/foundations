@@ -8,23 +8,32 @@ func Must1(err error) {
 	}
 }
 
-// Must panics if err is not nil and otherwise returns value.
+// Must panics if err is not nil and otherwise returns v.
 //
 // It is named as Must without a number suffix cause functions with
 // two parameters are most common.
-func Must[T any](value T, err error) T {
+func Must[T any](v T, err error) T {
 	if err != nil {
 		panic(err)
 	}
 
-	return value
+	return v
 }
 
-// Must3 panics if err is not nil, otherwise returns value1 and value2.
-func Must3[T1 any, T2 any](value1 T1, value2 T2, err error) (T1, T2) {
+// Must3 panics if err is not nil, otherwise returns v1 and v2.
+func Must3[T1 any, T2 any](v1 T1, v2 T2, err error) (T1, T2) {
 	if err != nil {
 		panic(err)
 	}
 
-	return value1, value2
+	return v1, v2
+}
+
+// Must4 panics if err is not nil, otherwise returns v1, v2 and v3.
+func Must4[T1 any, T2 any, T3 any](v1 T1, v2 T2, v3 T3, err error) (T1, T2, T3) {
+	if err != nil {
+		panic(err)
+	}
+
+	return v1, v2, v3
 }
