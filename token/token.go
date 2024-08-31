@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	ErrMalformedToken = errors.New("token: invalid format")
+	ErrMalformedToken = errors.New("foundations/token: invalid format")
 )
 
 // TokenFromBearerString returns the token from a bearer token string.
@@ -15,5 +15,10 @@ func TokenFromBearerString(str string) (string, error) {
 		return "", ErrMalformedToken
 	}
 
-	return strings.TrimPrefix(strings.TrimSpace(str), "Bearer "), nil
+	tok := strings.TrimSpace(strings.TrimPrefix(str, "Bearer "))
+	if tok == "" {
+		return "", ErrMalformedToken
+	}
+
+	return tok, nil
 }
