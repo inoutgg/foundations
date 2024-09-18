@@ -1,5 +1,9 @@
-# Created by https://www.toptal.com/developers/gitignore/api/macos,go,vim,linux,node
-# Edit at https://www.toptal.com/developers/gitignore?templates=macos,go,vim,linux,node
+# Created by https://www.toptal.com/developers/gitignore/api/macos,go,vim,linux,node,direnv
+# Edit at https://www.toptal.com/developers/gitignore?templates=macos,go,vim,linux,node,direnv
+
+### direnv ###
+.direnv
+.envrc
 
 ### Go ###
 # If you prefer the allow list template instead of the deny list, see community template:
@@ -232,4 +236,4 @@ tags
 # Persistent undo
 [._]*.un~
 
-# End of https://www.toptal.com/developers/gitignore/api/macos,go,vim,linux,node
+# End of https://www.toptal.com/developers/gitignore/api/macos,go,vim,linux,node,direnv

@@ -1,4 +1,4 @@
-// This module is wrapped off completely from https://github.com/jackc/pgx-gofrs-uuid
+// This module is ripped off completely from https://github.com/jackc/pgx-gofrs-uuid
 // and adapted to use github.com/google/uuid instead of github.com/gofrs/uuid.
 package pgxuuid
 
