@@ -1,15 +1,15 @@
-package server
+package httpserver
 
 import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
 
-	"log/slog"
-
+	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/startstop"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
@@ -27,7 +27,7 @@ type Server struct {
 type ServerConfig struct {
 	Handler http.Handler
 
-	// If EnableACME flag is set Port option is ignored.
+	// If EnableACME flag is this option is ignored.
 	Port int
 
 	// If EnableACME is true, then the server will use Let's Encrypt to automatically.
@@ -35,7 +35,10 @@ type ServerConfig struct {
 	ACMEHosts  []string
 }
 
+// NewServer creates a new HTTP server using the provded config.
 func NewServer(config *ServerConfig) *Server {
+	debug.Assert(config.Handler != nil, "expected Handler to be configured")
+
 	return &Server{
 		log:    slog.Default().With("name", "Server"),
 		config: config,

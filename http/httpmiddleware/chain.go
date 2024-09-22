@@ -1,9 +1,10 @@
-package middleware
+package httpmiddleware
 
 import "net/http"
 
 var _ Middleware = (*Chain)(nil)
 
+// Chain represents a sequence of middlewares acting as a single Middleware.
 type Chain struct {
 	middlewares []Middleware
 }

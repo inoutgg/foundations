@@ -1,13 +1,13 @@
-package errorhandler
+package httperror
 
 import (
 	"net/http"
-
-	httperror "go.inout.gg/foundations/http/error"
 )
 
-var _ Handler = (HandlerFunc)(nil)
-var _ ErrorHandler = (ErrorHandlerFunc)(nil)
+var (
+	_ Handler      = (HandlerFunc)(nil)
+	_ ErrorHandler = (ErrorHandlerFunc)(nil)
+)
 
 // Handler is like http.Handler, but with an additional error return value.
 type Handler interface {
@@ -47,7 +47,7 @@ func WithErrorHandler(errorHandler ErrorHandler) func(HandlerFunc) http.HandlerF
 
 // DefaultErrorHandler is the default error handler.
 var DefaultErrorHandler = ErrorHandlerFunc(func(w http.ResponseWriter, r *http.Request, err error) {
-	if err, ok := err.(httperror.HttpError); ok {
+	if err, ok := err.(HttpError); ok {
 		http.Error(w, err.Error(), err.StatusCode())
 		return
 	}
