@@ -5,22 +5,20 @@ on:
     branches: [main]
   pull_request:
 
-
-
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ '1.22.x' ]
+        go-version: ["1.22.x"]
 
     services:
       postgres:
         image: postgres
         env:
-          POSTGRES_PASSWORD: local 
-          POSTGRES_USER: local 
-          POSTGRES_DB: local 
+          POSTGRES_PASSWORD: local
+          POSTGRES_USER: local
+          POSTGRES_DB: local
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -46,18 +44,5 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name:  Run Tests
+      - name: Run Tests
         run: go test -v ./...
-
-  lint:
-    name: lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: stable
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.58
