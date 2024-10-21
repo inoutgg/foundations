@@ -1,4 +1,4 @@
-package dbutil
+package sqldb
 
 import (
 	"errors"
@@ -14,11 +14,12 @@ const (
 
 // IsUniqueViolationError returns true if the error is a unique violation error.
 func IsUniqueViolationError(err error) bool {
-	if pgxErr, ok := err.(*pgconn.PgError); !ok || pgxErr.Code != ErrCodeUniqueViolation {
-		return false
+	pgxErr := &pgconn.PgError{}
+	if errors.As(err, &pgxErr) {
+		return pgxErr.Code == ErrCodeUniqueViolation
 	}
 
-	return true
+	return false
 }
 
 // IsNotFoundError returns true if the error is a pgx no rows error.

@@ -3,9 +3,8 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_PASSWORD: test 
-      POSTGRES_USER: test 
-      POSTGRES_DB: test 
+      POSTGRES_PASSWORD: local
+      POSTGRES_USER: local
+      POSTGRES_DB: local
     ports:
       - "5432:5432"
-

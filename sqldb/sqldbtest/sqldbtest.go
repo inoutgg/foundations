@@ -1,30 +1,26 @@
-// Package dbtesting providers utilities for testing database related code.
+// Package sqldbtest provides utilities for testing database-related code.
 //
-// It provides a set of utility functions to initialize a database pool,
-// load DLL schema, clean it up, etc.
+// It offers a set of utility functions to initialize a database pool,
+// load DDL schema, clean it up, and perform other testing-related tasks.
 //
-// Note the package is intended to be used only within testing files.
-package dbtest
+// Note: This package is intended to be used only within test files.
+package sqldbtest
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/samber/lo"
 	"go.inout.gg/foundations/env"
 	"go.inout.gg/foundations/must"
-	"go.inout.gg/foundations/sql/db/pgxuuid"
+	"go.inout.gg/foundations/sqldb"
 )
 
 const (
@@ -36,16 +32,13 @@ WHERE table_schema=$1::text;
 )
 
 func queryTruncateTable(table string) string { return fmt.Sprintf("TRUNCATE %s;", table) }
-
-func queryDropTable(
-	table string,
-) string {
+func queryDropTable(table string) string {
 	return fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE;", table)
 }
 
 type Config struct {
-	// TimeoutSecond is the timeout for establishing a connection to the database.
-	TimeoutSecond int `env:"DB_CONN_TIMEOUT" envDefault:"5"` // optional (default: 5)
+	// Timeout is the timeout for establishing a connection to the database in milliseconds.
+	Timeout int `env:"DATABASE_CONNECTION_TIMEOUT" envDefault:"5000"` // optional (default: 5000ms)
 
 	// DatabaseURI is the connection string for the database.
 	DatabaseURI string `env:"DATABASE_URI"`
@@ -53,20 +46,22 @@ type Config struct {
 	// Schema is the schema to use for the database.
 	Schema string `env:"DB_SCHEMA" envDefault:"public"` // optional (default: "public")
 
-	// FilePath is the path to the DDL file.
-	FilePath []string `env:"DB_SCHEMA_PATH" envSeparator:","`
-
-	AfterConnect func(context.Context, *pgx.Conn) error `env:"-"`
+	Up func(context.Context, *pgx.Conn) error
 }
 
-// MustLoadConfig loads the configuration from the environment.
+// WithUp sets the database initialization function.
+func WithUp(up func(context.Context, *pgx.Conn) error) func(*Config) {
+	return func(c *Config) { c.Up = up }
+}
+
+// MustConfig loads the configuration from the environment.
 //
 // If no paths are provided, it defaults to ".test.env" in the current
-// working directory (which for tests is the directory in which they are located at),
+// working directory (which for tests is the directory in which they are located),
 // and in the root of the project.
 //
 // It panics if there is an error loading the configuration.
-func MustLoadConfig(paths ...string) *Config {
+func MustConfig(paths []string, opts ...func(*Config)) *Config {
 	if len(paths) == 0 {
 		currentModulePath := must.Must(os.Getwd())
 		rootPath := findModuleRoot(currentModulePath)
@@ -77,6 +72,9 @@ func MustLoadConfig(paths ...string) *Config {
 	}
 
 	config := env.MustLoad[Config](paths...)
+	for _, opt := range opts {
+		opt(config)
+	}
 
 	return config
 }
@@ -84,44 +82,22 @@ func MustLoadConfig(paths ...string) *Config {
 // DB is a wrapper around pgxpool.Pool with useful utilities for DB management
 // in tests.
 type DB struct {
-	config    *Config
-	tb        testing.TB
-	pool      *pgxpool.Pool
+	config *Config
+	tb     testing.TB
+	pool   *pgxpool.Pool
+
 	closeOnce sync.Once
 }
 
-func makePool(ctx context.Context, cfg *Config) *pgxpool.Pool {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*time.Duration(cfg.TimeoutSecond))
-	defer cancel()
-
-	config := must.Must(pgxpool.ParseConfig(cfg.DatabaseURI))
-	config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-		// UUID is common enough to be registered by default.
-		pgxuuid.Register(conn.TypeMap())
-
-		if cfg.AfterConnect != nil {
-			return cfg.AfterConnect(ctx, conn)
-		}
-
-		return nil
-	}
-
-	pool := must.Must(pgxpool.NewWithConfig(ctx, config))
-
-	must.Must1(pool.Ping(ctx))
-
-	return pool
-}
-
 // Must loads the configuration from the environment and creates a new DB.
-func Must(ctx context.Context, tb testing.TB) *DB {
+func Must(ctx context.Context, tb testing.TB, opts ...func(*Config)) *DB {
 	tb.Helper()
 
-	config := MustLoadConfig()
+	config := MustConfig([]string{}, opts...)
 	return MustWithConfig(ctx, tb, config)
 }
 
-// Must creates a new DB.
+// MustWithConfig creates a new DB with the given config.
 //
 // It initializes a new pool with the given config.
 //
@@ -129,7 +105,7 @@ func Must(ctx context.Context, tb testing.TB) *DB {
 func MustWithConfig(ctx context.Context, tb testing.TB, config *Config) *DB {
 	tb.Helper()
 
-	pool := makePool(ctx, config)
+	pool := sqldb.MustPool(ctx, config.DatabaseURI)
 	db := &DB{
 		config,
 		tb,
@@ -140,52 +116,30 @@ func MustWithConfig(ctx context.Context, tb testing.TB, config *Config) *DB {
 	tb.Cleanup(db.Close)
 
 	return db
-
 }
 
-// Pool returns the underlying pool.
+// Pool returns the underlying connection pool.
 func (db *DB) Pool() *pgxpool.Pool { return db.pool }
 
-// Close closes the DB.
+// Close closes the DB connection.
 func (db *DB) Close() { db.closeOnce.Do(db.close) }
 func (db *DB) close() { db.pool.Close() }
 
-// Init initializes tables in the database by creating a schema provided
-// by the config.
 func (db *DB) Init(ctx context.Context) error {
+	conn, err := db.pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("foundations/sqdbtest: failed to acquire a connection: %w", err)
+	}
+	defer conn.Release()
+
+	return db.up(ctx, conn.Conn())
+}
+
+func (db *DB) up(ctx context.Context, conn *pgx.Conn) error {
 	db.tb.Helper()
 
-	var sql []string
-	for _, path := range db.config.FilePath {
-		schemaContent, err := readFile(path)
-		if err != nil {
-			return err
-		}
-
-		sql = append(sql, parseSchema(schemaContent)...)
-	}
-
-	tx, err := db.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("dbtesting: error starting transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	var errs []error
-
-	for _, s := range sql {
-		_, err := tx.Exec(ctx, s)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("dbtesting: error executing query %s: %w", s, err))
-		}
-	}
-
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("dbtesting: error committing transaction: %w", err)
+	if db.config.Up != nil {
+		return db.config.Up(ctx, conn)
 	}
 
 	return nil
@@ -197,7 +151,7 @@ func (db *DB) TruncateTable(ctx context.Context, table string) error {
 
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("dbtesting: error starting transaction: %w", err)
+		return fmt.Errorf("foundations/sqdbtest: failed to start transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -206,15 +160,16 @@ func (db *DB) TruncateTable(ctx context.Context, table string) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("dbtesting: error committing transaction: %w", err)
+		return fmt.Errorf("foundations/sqdbtest: failed to commit transaction: %w", err)
 	}
 
 	return nil
 }
 
+// truncateTable wipes the specified table within the given transaction.
 func (db *DB) truncateTable(ctx context.Context, table string, tx pgx.Tx) error {
 	if _, err := tx.Exec(ctx, queryTruncateTable(table)); err != nil {
-		return fmt.Errorf("dbtesting: error truncating table %s: %w", table, err)
+		return fmt.Errorf("foundations/sqdbtest: failed to truncate table %s: %w", table, err)
 	}
 
 	return nil
@@ -226,7 +181,7 @@ func (db *DB) TruncateTables(ctx context.Context, tables []string) error {
 
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("dbtesting: error starting transaction: %w", err)
+		return fmt.Errorf("foundations/sqdbtest: failed to start transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -242,7 +197,7 @@ func (db *DB) TruncateTables(ctx context.Context, tables []string) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("dbtesting: error committing transaction: %w", err)
+		return fmt.Errorf("foundations/sqdbtest: failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -260,6 +215,35 @@ func (db *DB) TruncateAllTables(ctx context.Context) error {
 	return db.TruncateTables(ctx, tables)
 }
 
+// DropTables drops the specified tables from the schema.
+func (db *DB) DropTables(ctx context.Context, tables []string) error {
+	db.tb.Helper()
+
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("foundations/sqdbtest: failed to start transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for _, t := range tables {
+		if _, err := tx.Exec(ctx, queryDropTable(t)); err != nil {
+			return fmt.Errorf("foundations/sqdbtest: failed to drop table %s: %w", t, err)
+		}
+	}
+
+	return nil
+}
+
+// dropTable drops a single table from the schema within the given transaction.
+func (db *DB) dropTable(ctx context.Context, table string, tx pgx.Tx) error {
+	if _, err := tx.Exec(ctx, queryDropTable(table)); err != nil {
+		return fmt.Errorf("foundations/sqdbtest: failed to drop table %s: %w", table, err)
+	}
+
+	return nil
+}
+
+// DropAllTables drops all tables available in the schema.
 func (db *DB) DropAllTables(ctx context.Context) error {
 	db.tb.Helper()
 
@@ -270,7 +254,7 @@ func (db *DB) DropAllTables(ctx context.Context) error {
 
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("dbtesting: error starting transaction: %w", err)
+		return fmt.Errorf("foundations/sqdbtest: failed to start transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -286,21 +270,13 @@ func (db *DB) DropAllTables(ctx context.Context) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("dbtesting: error committing transaction: %w", err)
+		return fmt.Errorf("foundations/sqdbtest: failed to commit transaction: %w", err)
 	}
 
 	return nil
 }
 
-func (db *DB) dropTable(ctx context.Context, table string, tx pgx.Tx) error {
-	if _, err := tx.Exec(ctx, queryDropTable(table)); err != nil {
-		return fmt.Errorf("dbtesting: error dropping table: %w", err)
-	}
-
-	return nil
-}
-
-// Reset resets the database by truncating all tables and re-creating them.
+// Reset resets the database by dropping all tables and re-creating them.
 func (db *DB) Reset(ctx context.Context) error {
 	db.tb.Helper()
 
@@ -311,6 +287,7 @@ func (db *DB) Reset(ctx context.Context) error {
 	return db.Init(ctx)
 }
 
+// fetchAllTables returns a list of all tables available in the schema.
 func (db *DB) fetchAllTables(ctx context.Context) ([]string, error) {
 	var tables []string
 	rows, err := db.pool.Query(
@@ -319,14 +296,14 @@ func (db *DB) fetchAllTables(ctx context.Context) ([]string, error) {
 		pgtype.Text{String: db.config.Schema, Valid: true},
 	)
 	if err != nil {
-		return tables, fmt.Errorf("dbtesting: error fetching tables: %w", err)
+		return tables, fmt.Errorf("foundations/sqdbtest: failed to fetch tables: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var table pgtype.Text
 		if err := rows.Scan(&table); err != nil {
-			return tables, fmt.Errorf("dbtesting: error scanning table name: %w", err)
+			return tables, fmt.Errorf("foundations/sqdbtest: failed to scan table name: %w", err)
 		}
 
 		tables = append(tables, table.String)
@@ -335,13 +312,13 @@ func (db *DB) fetchAllTables(ctx context.Context) ([]string, error) {
 	return tables, nil
 }
 
-// rootpath returns the root path of the module.
-// It was copied from the [1]. Attributed to the Go Authors.
+// findModuleRoot returns the root path of the module.
+// It was adapted from the Go source code. Attributed to the Go Authors.
 //
-// 1: https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/cmd/go/internal/modload/init.go#L1565C1-L1583C2
+// Source: https://github.com/golang/go/blob/377646589d5fb0224014683e0d1f1db35e60c3ac/src/cmd/go/internal/modload/init.go#L1565C1-L1583C2
 func findModuleRoot(dir string) string {
 	if dir == "" {
-		panic("dir not set")
+		panic("foundations/sqdbtest: dir is not set")
 	}
 	dir = filepath.Clean(dir)
 
@@ -358,27 +335,4 @@ func findModuleRoot(dir string) string {
 	}
 
 	return ""
-}
-
-// readFile reads the content of the given file.
-func readFile(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", fmt.Errorf("dbtesting: error opening file %s: %w", path, err)
-	}
-	defer file.Close()
-
-	buf := new(strings.Builder)
-	_, err = io.Copy(buf, file)
-	if err != nil {
-		return "", fmt.Errorf("dbtesting: error reading file %s: %w", path, err)
-	}
-
-	return buf.String(), nil
-}
-
-func parseSchema(schema string) []string {
-	return lo.Filter(strings.Split(schema, ";"), func(s string, _ int) bool {
-		return strings.TrimSpace(s) != ""
-	})
 }

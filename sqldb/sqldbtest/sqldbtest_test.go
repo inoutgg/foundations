@@ -1,8 +1,9 @@
-package dbtest
+package sqldbtest
 
 import (
 	"cmp"
 	"context"
+	"os"
 	"slices"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestFetchAllTables(t *testing.T) {
 		slices.Equal([]string{}, tables)
 	})
 
-	t.Run("it works with a schema", func(t *testing.T) {
+	t.Run("it works with an Up config", func(t *testing.T) {
 		ctx := context.Background()
 		content, err := readFile("fixtures/schema.sql")
 		require.NoError(t, err)
@@ -68,6 +69,7 @@ func TestTruncateTable(t *testing.T) {
 	ctx := context.Background()
 	db := Must(ctx, t)
 	defer db.Close()
+
 	t.Run("it works", func(t *testing.T) {
 		ctx := context.Background()
 		err := db.Init(ctx)
@@ -115,4 +117,14 @@ func sliceUnorderedEqual[T cmp.Ordered](a, b []T) bool {
 	slices.Sort(b)
 
 	return slices.Equal(a, b)
+}
+
+// readFile reads file from the given path.
+func readFile(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	return string(content), nil
 }

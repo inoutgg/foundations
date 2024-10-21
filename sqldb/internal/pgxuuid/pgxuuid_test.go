@@ -8,12 +8,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.inout.gg/foundations/sql/db/dbtest"
+	"go.inout.gg/foundations/sqldb/sqldbtest"
 )
 
 func TestCodecDecodeValue(t *testing.T) {
 	ctx := context.Background()
-	db := dbtest.Must(ctx, t)
+	db := sqldbtest.Must(ctx, t)
 
 	pool := db.Pool()
 	original, err := uuid.NewV7()
@@ -50,7 +50,7 @@ func TestCodecDecodeValue(t *testing.T) {
 
 func TestArray(t *testing.T) {
 	ctx := context.Background()
-	db := dbtest.Must(ctx, t)
+	db := sqldbtest.Must(ctx, t)
 	p := db.Pool()
 
 	inputSlice := []uuid.UUID{}

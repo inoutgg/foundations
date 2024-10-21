@@ -1,11 +1,9 @@
-package html
+package htmltemplate
 
 import (
 	"fmt"
 	"io"
 	"io/fs"
-
-	"go.inout.gg/foundations/template/html/engine"
 )
 
 // Renderer renders a template using provided underlying engine.
@@ -15,12 +13,12 @@ type Renderer interface {
 }
 
 type renderer struct {
-	engine engine.Engine
+	engine Engine
 }
 
-func New(f fs.FS, e engine.Engine) (Renderer, error) {
+func New(f fs.FS, e Engine) (Renderer, error) {
 	if err := e.ParseFS(f); err != nil {
-		return nil, fmt.Errorf("template/html: failed to parse templates: %w", err)
+		return nil, fmt.Errorf("htmltemplate: failed to parse templates: %w", err)
 	}
 
 	return &renderer{engine: e}, nil
