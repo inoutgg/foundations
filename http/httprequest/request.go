@@ -26,8 +26,8 @@ var (
 func DecodeJSON[T any](r *http.Request) (*T, error) {
 	ctx := r.Context()
 
-	var v *T
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	var v T
+	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
 		return nil, fmt.Errorf("http/request: unable to decode JSON: %w", err)
 	}
 
@@ -35,7 +35,7 @@ func DecodeJSON[T any](r *http.Request) (*T, error) {
 		return nil, err
 	}
 
-	return v, nil
+	return &v, nil
 }
 
 // DecodeForm converts a url.Values (including form values) from the incoming

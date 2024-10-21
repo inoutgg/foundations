@@ -1,4 +1,4 @@
-// NOTE: the encoder is registered automatically for `dbtest` struct
+// The encoder is registered automatically for sqldbtest.DB via sqldb.WithUUID
 // so no need to register it here.
 package pgxuuid_test
 
@@ -18,6 +18,8 @@ func TestCodecDecodeValue(t *testing.T) {
 	pool := db.Pool()
 	original, err := uuid.NewV7()
 	require.NoError(t, err)
+
+	print("here")
 
 	rows, err := pool.Query(ctx, `select $1::uuid`, original)
 	require.NoError(t, err)

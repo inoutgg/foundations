@@ -105,7 +105,7 @@ func Must(ctx context.Context, tb testing.TB, opts ...func(*Config)) *DB {
 func MustWithConfig(ctx context.Context, tb testing.TB, config *Config) *DB {
 	tb.Helper()
 
-	pool := sqldb.MustPool(ctx, config.DatabaseURI)
+	pool := sqldb.MustPool(ctx, config.DatabaseURI, sqldb.WithUUID())
 	db := &DB{
 		config,
 		tb,
