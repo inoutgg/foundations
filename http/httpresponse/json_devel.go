@@ -21,7 +21,7 @@ func JSON(w http.ResponseWriter, v any, status int) error {
 	enc.SetIndent("", JSONIdentation)
 
 	if err := enc.Encode(v); err != nil {
-		return fmt.Errorf("http/response: unable to encode JSON: %w", err)
+		return fmt.Errorf("foundations/httpresponse: unable to encode JSON: %w", err)
 	}
 
 	return nil

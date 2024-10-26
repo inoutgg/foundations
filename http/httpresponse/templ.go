@@ -16,7 +16,7 @@ func TEMPL(w http.ResponseWriter, r *http.Request, t templ.Component, status int
 
 	err := t.Render(r.Context(), w)
 	if err != nil {
-		return fmt.Errorf("http/response: unable to render template: %w", err)
+		return fmt.Errorf("foundations/httpresponse: unable to render template: %w", err)
 	}
 
 	return nil

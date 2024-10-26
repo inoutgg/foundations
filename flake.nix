@@ -6,21 +6,32 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      nixpkgs,
+      flake-utils,
+      ...
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = import nixpkgs { inherit system; };
+        commonPackages = with pkgs; [
+          nodejs
+          sqlc
+          golangci-lint
+        ];
       in
       {
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            nodejs
-            go_1_23
-            sqlc
-            golangci-lint
-            postgresql_16
-          ];
+          buildInputs = commonPackages ++ [ pkgs.go_1_23 ];
         };
+
+        shellHook = ''
+          export GOTOOLCHAIN="local"
+        '';
+
+        formatter = pkgs.nixfmt-rfc-style;
       }
     );
 }

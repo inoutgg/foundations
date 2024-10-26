@@ -28,7 +28,7 @@ func DecodeJSON[T any](r *http.Request) (*T, error) {
 
 	var v T
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
-		return nil, fmt.Errorf("http/request: unable to decode JSON: %w", err)
+		return nil, fmt.Errorf("foundations/httprequest: unable to decode JSON: %w", err)
 	}
 
 	if err := Validator.StructCtx(ctx, v); err != nil {
@@ -48,7 +48,7 @@ func DecodeJSON[T any](r *http.Request) (*T, error) {
 func DecodeForm[T any](r *http.Request) (*T, error) {
 	ctx := r.Context()
 	if err := r.ParseForm(); err != nil {
-		return nil, fmt.Errorf("http/request: unable to parse form request: %w", err)
+		return nil, fmt.Errorf("foundations/httprequest: unable to parse form request: %w", err)
 	}
 
 	var v T
