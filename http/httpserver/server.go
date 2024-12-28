@@ -19,12 +19,12 @@ var _ startstop.Starter = (*Server)(nil)
 
 type Server struct {
 	log      *slog.Logger
-	config   *ServerConfig
+	config   *Config
 	servers  []*http.Server
 	launched bool
 }
 
-type ServerConfig struct {
+type Config struct {
 	Handler http.Handler
 
 	// If EnableACME flag is this option is ignored.
@@ -35,8 +35,8 @@ type ServerConfig struct {
 	ACMEHosts  []string
 }
 
-// NewServer creates a new HTTP server using the provded config.
-func NewServer(config *ServerConfig) *Server {
+// New creates a new HTTP server using the provded config.
+func New(config *Config) *Server {
 	debug.Assert(config.Handler != nil, "expected Handler to be configured")
 
 	return &Server{

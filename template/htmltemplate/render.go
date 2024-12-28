@@ -9,7 +9,7 @@ import (
 // Renderer renders a template using provided underlying engine.
 type Renderer interface {
 	// Render renders a template with the given name and data.
-	Render(w io.Writer, name string, data any) error
+	Render(io.Writer, string, any) error
 }
 
 type renderer struct {
