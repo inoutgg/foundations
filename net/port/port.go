@@ -5,8 +5,10 @@ import (
 	"net"
 )
 
-const proto = "tcp"
-const addr = ":0"
+const (
+	proto = "tcp"
+	addr  = ":0"
+)
 
 // Free returns a free port on the local machine.
 func Free() (int, error) {

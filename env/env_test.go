@@ -14,7 +14,6 @@ type Config struct {
 }
 
 func TestLoad(t *testing.T) {
-
 	t.Run("missing value", func(t *testing.T) {
 		// Make sure that the environment variables are not set.
 		os.Clearenv()

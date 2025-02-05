@@ -5,9 +5,7 @@ import (
 	"strings"
 )
 
-var (
-	ErrMalformedToken = errors.New("foundations/token: invalid format")
-)
+var ErrMalformedToken = errors.New("foundations/token: invalid format")
 
 // TokenFromBearerString returns the token from a bearer token string.
 func TokenFromBearerString(str string) (string, error) {

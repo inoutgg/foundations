@@ -51,10 +51,8 @@ func NewPool(ctx context.Context, connString string, cfgs ...func(*pgxpool.Confi
 		return nil, fmt.Errorf("foundations/sqldb: failed to create a new database pool: %w", err)
 	}
 	defer func() {
-		if err != nil {
-			if pool != nil {
-				pool.Close()
-			}
+		if err != nil && pool != nil {
+			pool.Close()
 		}
 	}()
 

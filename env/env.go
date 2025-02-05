@@ -10,10 +10,8 @@ import (
 	"go.inout.gg/foundations/must"
 )
 
-var (
-	// Validator is the default validator used to validate the configuration.
-	Validator = validator.New(validator.WithRequiredStructEnabled())
-)
+// Validator is the default validator used to validate the configuration.
+var Validator = validator.New(validator.WithRequiredStructEnabled())
 
 // Load loads the environment configuration into a struct T.
 //

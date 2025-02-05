@@ -20,6 +20,8 @@
           nodejs
           sqlc
           golangci-lint
+
+          mockgen
         ];
       in
       {
@@ -29,6 +31,7 @@
 
         shellHook = ''
           export GOTOOLCHAIN="local"
+          export GOFUMPT_SPLIT_LONG_LINES=true
         '';
 
         formatter = pkgs.nixfmt-rfc-style;
