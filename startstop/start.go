@@ -20,14 +20,13 @@ func StartBlocking(ctx context.Context, starter Starter, sg ...os.Signal) error 
 	serviceCtx, serviceCancel := context.WithCancelCause(ctx)
 	defer serviceCancel(nil)
 
-	sig := os.Interrupt
-	if len(sg) > 0 {
-		sig = sg[0]
+	if len(sg) == 0 {
+		sg = []os.Signal{os.Interrupt}
 	}
 
 	sigCh := make(chan os.Signal, 1)
 
-	signal.Notify(sigCh, sig)
+	signal.Notify(sigCh, sg...)
 
 	go func(ctx context.Context) {
 		<-sigCh
@@ -44,5 +43,9 @@ func StartBlocking(ctx context.Context, starter Starter, sg ...os.Signal) error 
 	// Wait for the starter to shutdown
 	<-serviceCtx.Done()
 
-	return context.Cause(serviceCtx)
+	if err := context.Cause(serviceCtx); err != nil && err != context.Canceled {
+		return err
+	}
+
+	return nil
 }
