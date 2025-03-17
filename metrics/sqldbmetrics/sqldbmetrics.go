@@ -1,12 +1,19 @@
 package sqldbmetrics
 
 import (
+	"cmp"
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.inout.gg/foundations/debug"
+	"go.inout.gg/foundations/metrics"
 	"go.inout.gg/foundations/must"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
+)
+
+const (
+	name = "go.inout.gg/foundations/metrics/sqldbmetrics"
 )
 
 type stats struct {
@@ -28,18 +35,18 @@ type stats struct {
 func newStats(meter metric.Meter) *stats {
 	return &stats{
 		meter:                   meter,
-		acquireCount:            must.Must(meter.Int64ObservableCounter("acquire_count", metric.WithDescription("Number of acquire operations"))),
-		acquireDuration:         must.Must(meter.Int64Histogram("acquire_duration", metric.WithDescription("Duration of acquire operations"))),
-		acquiredConns:           must.Must(meter.Int64ObservableCounter("acquired_conns", metric.WithDescription("Number of acquired connections"))),
-		canceledAcquireCount:    must.Must(meter.Int64ObservableCounter("canceled_acquire_count", metric.WithDescription("Number of canceled acquire operations"))),
-		constructingConns:       must.Must(meter.Int64ObservableCounter("constructing_conns", metric.WithDescription("Number of connections being constructed"))),
-		emptyAcquireCount:       must.Must(meter.Int64ObservableCounter("empty_acquire_count", metric.WithDescription("Number of empty acquire operations"))),
-		idleConns:               must.Must(meter.Int64ObservableCounter("idle_conns", metric.WithDescription("Number of idle connections"))),
-		maxConns:                must.Must(meter.Int64ObservableCounter("max_conns", metric.WithDescription("Maximum number of connections"))),
-		maxIdleDestroyCount:     must.Must(meter.Int64ObservableCounter("max_idle_destroy_count", metric.WithDescription("Number of connections destroyed due to max idle"))),
-		maxLifetimeDestroyCount: must.Must(meter.Int64ObservableCounter("max_lifetime_destroy_count", metric.WithDescription("Number of connections destroyed due to max lifetime"))),
-		newConnsCount:           must.Must(meter.Int64ObservableCounter("new_conns_count", metric.WithDescription("Number of new connections"))),
-		totalConns:              must.Must(meter.Int64ObservableCounter("total_conns", metric.WithDescription("Total number of connections"))),
+		acquireCount:            must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("acquire_count"), metric.WithDescription("Number of acquire operations"))),
+		acquireDuration:         must.Must(meter.Int64Histogram(metrics.FormatMetricName("acquire_duration"), metric.WithDescription("Duration of acquire operations"))),
+		acquiredConns:           must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("acquired_conns"), metric.WithDescription("Number of acquired connections"))),
+		canceledAcquireCount:    must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("canceled_acquire_count"), metric.WithDescription("Number of canceled acquire operations"))),
+		constructingConns:       must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("constructing_conns"), metric.WithDescription("Number of connections being constructed"))),
+		emptyAcquireCount:       must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("empty_acquire_count"), metric.WithDescription("Number of empty acquire operations"))),
+		idleConns:               must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("idle_conns"), metric.WithDescription("Number of idle connections"))),
+		maxConns:                must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("max_conns"), metric.WithDescription("Maximum number of connections"))),
+		maxIdleDestroyCount:     must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("max_idle_destroy_count"), metric.WithDescription("Number of connections destroyed due to max idle"))),
+		maxLifetimeDestroyCount: must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("max_lifetime_destroy_count"), metric.WithDescription("Number of connections destroyed due to max lifetime"))),
+		newConnsCount:           must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("new_conns_count"), metric.WithDescription("Number of new connections"))),
+		totalConns:              must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("total_conns_count"), metric.WithDescription("Total number of connections"))),
 	}
 }
 
@@ -66,10 +73,21 @@ func (s *stats) register(p *pgxpool.Pool) error {
 	return err
 }
 
-func MustRegister(p *pgxpool.Pool) {
+type Config struct {
+	Provider metric.MeterProvider
+}
+
+func (c *Config) defaults() {
+	c.Provider = cmp.Or(c.Provider, otel.GetMeterProvider())
+}
+
+func MustRegister(p *pgxpool.Pool, cfg *Config) {
+	cfg.defaults()
+	debug.Assert(cfg.Provider != nil, "provider is nil")
+
 	var (
 		provider = otel.GetMeterProvider()
-		meter    = provider.Meter("foundations:sqldbmetrics")
+		meter    = provider.Meter(name)
 	)
 
 	must.Must1(newStats(meter).register(p))
