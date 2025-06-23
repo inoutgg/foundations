@@ -53,7 +53,7 @@ func TestJSON(t *testing.T) {
 		}
 		r := requestJSON(t, expected)
 
-		body, err := DecodeJSON[Body](r)
+		body, err := DecodeJSON[Body](r, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -66,6 +66,7 @@ func TestJSON(t *testing.T) {
 	t.Run("it handles error correctly", func(t *testing.T) {
 		body, err := DecodeJSON[Body](
 			httptest.NewRequest(http.MethodPost, "/", nil),
+			nil,
 		)
 
 		if err == nil || body != nil {
@@ -75,7 +76,7 @@ func TestJSON(t *testing.T) {
 
 	t.Run("it validates result", func(t *testing.T) {
 		r := requestJSON(t, Body{})
-		_, err := DecodeJSON[Body](r)
+		_, err := DecodeJSON[Body](r, nil)
 		if err == nil {
 			t.Fatal("expected validation error")
 		}
@@ -98,7 +99,7 @@ func TestForm(t *testing.T) {
 			"int_field":               {"1"},
 			"nested_field.bool_field": {"true"},
 		})
-		body, err := DecodeForm[Body](r)
+		body, err := DecodeForm[Body](r, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -117,6 +118,7 @@ func TestForm(t *testing.T) {
 	t.Run("it handles error correctly", func(t *testing.T) {
 		body, err := DecodeForm[Body](
 			httptest.NewRequest(http.MethodPost, "/", nil),
+			nil,
 		)
 
 		if err == nil || body != nil {
@@ -126,7 +128,7 @@ func TestForm(t *testing.T) {
 
 	t.Run("it validates result", func(t *testing.T) {
 		r := requestForm(url.Values{})
-		_, err := DecodeForm[Body](r)
+		_, err := DecodeForm[Body](r, nil)
 		if err == nil {
 			t.Fatal("expected validation error")
 		}

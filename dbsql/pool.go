@@ -1,4 +1,4 @@
-package sqldb
+package dbsql
 
 import (
 	"context"
@@ -6,13 +6,18 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.inout.gg/foundations/dbsql/internal/pgxuuid"
 	"go.inout.gg/foundations/must"
-	"go.inout.gg/foundations/sqldb/internal/pgxuuid"
 )
 
 // WithTracer sets the query tracer for the database pool.
 func WithTracer(t pgx.QueryTracer) func(c *pgxpool.Config) {
 	return func(c *pgxpool.Config) { c.ConnConfig.Tracer = t }
+}
+
+// WithSearchPath sets the search path for the database pool.
+func WithSearchPath(schema string) func(c *pgxpool.Config) {
+	return func(c *pgxpool.Config) { c.ConnConfig.RuntimeParams["search_path"] = schema }
 }
 
 // WithUUID adds native support for converting between Postgres UUID and google/uuid.
@@ -37,16 +42,27 @@ func MustPool(ctx context.Context, connString string, cfgs ...func(*pgxpool.Conf
 // NewPool creates a new connection pool using the provided connection string.
 //
 // Optional cfgs like WithUUID or WithTracer can be provided.
-func NewPool(ctx context.Context, connString string, cfgs ...func(*pgxpool.Config)) (pool *pgxpool.Pool, err error) {
-	config, err := pgxpool.ParseConfig(connString)
+func NewPool(
+	ctx context.Context,
+	connStr string,
+	cfgs ...func(*pgxpool.Config),
+) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
-		return nil, fmt.Errorf("foundations/sqldb: failed to parse database connection string: %w", err)
+		return nil, fmt.Errorf(
+			"foundations/sqldb: failed to parse database connection string: %w",
+			err,
+		)
 	}
 	for _, f := range cfgs {
-		f(config)
+		f(cfg)
 	}
 
-	pool, err = pgxpool.NewWithConfig(ctx, config)
+	return NewPoolWithConfig(ctx, cfg)
+}
+
+func NewPoolWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("foundations/sqldb: failed to create a new database pool: %w", err)
 	}
@@ -57,7 +73,11 @@ func NewPool(ctx context.Context, connString string, cfgs ...func(*pgxpool.Confi
 	}()
 
 	if err = pool.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("foundations/sqldb: failed to connect to the database at %s: %w", connString, err)
+		return nil, fmt.Errorf(
+			"foundations/sqldb: failed to connect to the database at %s: %w",
+			cfg.ConnString(),
+			err,
+		)
 	}
 
 	return pool, nil

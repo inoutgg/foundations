@@ -16,22 +16,57 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
+        golint = import ./golint.nix { inherit pkgs; };
+
         commonPackages = with pkgs; [
+          # Runtimes
           nodejs
+          go
+
+          # Tools
           sqlc
+          typos
+          mockgen
           golangci-lint
 
-          mockgen
+          # LSP
+          typos-lsp
+          golangci-lint-langserver
         ];
       in
       {
+        golangci-lint = {
+          plugins = [
+            {
+              module = "go.uber.org/nilaway";
+              import = "go.uber.org/nilaway/cmd/gclplugin";
+              version = "latest";
+            }
+          ];
+        };
+
         devShells.default = pkgs.mkShell {
-          buildInputs = commonPackages ++ [ pkgs.go_1_23 ];
+          buildInputs = with pkgs; [
+            # Runtimes
+            nodejs
+            go
+
+            # Tools
+            sqlc
+            typos
+            mockgen
+            just
+            golangci-lint
+            # golint
+
+            # LSP
+            typos-lsp
+            golangci-lint-langserver
+          ];
         };
 
         shellHook = ''
           export GOTOOLCHAIN="local"
-          export GOFUMPT_SPLIT_LONG_LINES=true
         '';
 
         formatter = pkgs.nixfmt-rfc-style;
