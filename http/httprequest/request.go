@@ -17,6 +17,7 @@ var (
 	DefaultValidator = validator.New(validator.WithRequiredStructEnabled())
 )
 
+// DecodeJSONOptions is used to configure the DecodeJSON function.
 type DecodeJSONOptions struct {
 	// Validator is the validator to use for validation.
 	Validator *validator.Validate
@@ -71,26 +72,26 @@ func DecodeForm[T any](r *http.Request, opts *DecodeFormOptions) (*T, error) {
 		return nil, fmt.Errorf("foundations/httprequest: unable to parse form request: %w", err)
 	}
 
-	decoder := DefaultFormDecoder
-	validator := DefaultValidator
+	decode := DefaultFormDecoder
+	validate := DefaultValidator
 	if opts != nil {
 		if opts.Decoder != nil {
-			decoder = opts.Decoder
+			decode = opts.Decoder
 		}
 
 		if opts.Validator != nil {
-			validator = opts.Validator
+			validate = opts.Validator
 		}
 	}
 
 	var v T
 	values := r.Form
 
-	if err := decoder.Decode(&v, values); err != nil {
+	if err := decode.Decode(&v, values); err != nil {
 		return nil, err
 	}
 
-	if err := validator.StructCtx(ctx, &v); err != nil {
+	if err := validate.StructCtx(ctx, &v); err != nil {
 		return nil, err
 	}
 

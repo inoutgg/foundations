@@ -1,26 +1,41 @@
 {
   pkgs ? import <nixpkgs> { },
-  config ? { },
 }:
+{
+  plugins ? { },
+}:
+let
+  config = {
+    name = "golangci-lint";
+    version = "v${pkgs.golangci-lint.version}";
+    plugins = plugins;
+  };
+
+  configFile = pkgs.writeTextFile {
+    name = "custom-gcl.yml";
+    text = builtins.toJSON config;
+  };
+in
 pkgs.stdenv.mkDerivation {
-  pname = "golangci-lint";
+  name = "golangci-lint-custom";
+  pname = "golangci-lint-custom";
   nativeBuildInputs = with pkgs; [
-    golangci-lint
+    git
+    # golangci-lint
   ];
 
   dontUnpack = true;
   dontStrip = true;
 
   buildPhase = ''
-    ${pkgs.writeTextFile ".custom-gcl.yml" ''
-      ${pkgs.formats.yaml config}
-    ''}
-    golangci-lint custom
+    # Copy config file to build directory
+    cp ${configFile} .custom-gcl.yml
+
+    ${pkgs.golangci-lint}/bin/golangci-lint custom
   '';
 
   installPhase = ''
     mkdir -p $out/bin
-    cp -R $build $out/bin
   '';
 
   meta = with pkgs.lib; {

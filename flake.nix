@@ -35,14 +35,16 @@
         ];
       in
       {
-        golangci-lint = {
-          plugins = [
-            {
-              module = "go.uber.org/nilaway";
-              import = "go.uber.org/nilaway/cmd/gclplugin";
-              version = "latest";
-            }
-          ];
+        packages = {
+          golangci-lint-custom = golint {
+            plugins = [
+              {
+                module = "go.uber.org/nilaway";
+                import = "go.uber.org/nilaway/cmd/gclplugin";
+                version = "latest";
+              }
+            ];
+          };
         };
 
         devShells.default = pkgs.mkShell {
@@ -57,7 +59,7 @@
             mockgen
             just
             golangci-lint
-            # golint
+            golint
 
             # LSP
             typos-lsp
