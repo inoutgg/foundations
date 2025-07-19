@@ -35,7 +35,7 @@ type Config struct {
 	ACMEHosts  []string
 }
 
-// New creates a new HTTP server using the provded config.
+// New creates a new HTTP server using the provided config.
 func New(config *Config) *Server {
 	debug.Assert(config.Handler != nil, "expected Handler to be configured")
 
