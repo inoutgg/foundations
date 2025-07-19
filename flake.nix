@@ -16,36 +16,8 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        golint = import ./golint.nix { inherit pkgs; };
-
-        commonPackages = with pkgs; [
-          # Runtimes
-          nodejs
-          go
-
-          # Tools
-          sqlc
-          typos
-          mockgen
-          golangci-lint
-
-          # LSP
-          typos-lsp
-          golangci-lint-langserver
-        ];
       in
       {
-        packages = {
-          golangci-lint-custom = golint {
-            plugins = [
-              {
-                module = "go.uber.org/nilaway";
-                import = "go.uber.org/nilaway/cmd/gclplugin";
-                version = "latest";
-              }
-            ];
-          };
-        };
 
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
