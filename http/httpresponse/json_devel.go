@@ -10,7 +10,7 @@ import (
 
 const (
 	// 4 spaces
-	JSONIdentation = "    "
+	JSONIndentation = "    "
 )
 
 func JSON(w http.ResponseWriter, v any, status int) error {
@@ -18,7 +18,7 @@ func JSON(w http.ResponseWriter, v any, status int) error {
 	w.WriteHeader(status)
 
 	enc := json.NewEncoder(w)
-	enc.SetIndent("", JSONIdentation)
+	enc.SetIndent("", JSONIndentation)
 
 	if err := enc.Encode(v); err != nil {
 		return fmt.Errorf("foundations/httpresponse: unable to encode JSON: %w", err)

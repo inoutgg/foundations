@@ -16,22 +16,31 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        commonPackages = with pkgs; [
-          nodejs
-          sqlc
-          golangci-lint
-
-          mockgen
-        ];
       in
       {
+
         devShells.default = pkgs.mkShell {
-          buildInputs = commonPackages ++ [ pkgs.go_1_23 ];
+          buildInputs = with pkgs; [
+            # Runtimes
+            nodejs
+            go
+
+            # Tools
+            sqlc
+            typos
+            mockgen
+            just
+            golangci-lint
+            golint
+
+            # LSP
+            typos-lsp
+            golangci-lint-langserver
+          ];
         };
 
         shellHook = ''
           export GOTOOLCHAIN="local"
-          export GOFUMPT_SPLIT_LONG_LINES=true
         '';
 
         formatter = pkgs.nixfmt-rfc-style;

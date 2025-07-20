@@ -33,4 +33,4 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: DeterminateSystems/flake-checker-action@main
       - name: Test
-        run: nix develop --command go test -count=1 -race -v ./...
+        run: nix develop --command just test-all

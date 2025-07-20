@@ -11,12 +11,12 @@ var (
 var TODO http.HandlerFunc = http.HandlerFunc(
 	func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write(todoStr)
+		_, _ = w.Write(todoStr)
 	},
 )
 
 // HealthCheck returns an HTTP response with "ok" body and 200 status.
 func HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write(okStr)
+	_, _ = w.Write(okStr)
 }

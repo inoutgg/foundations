@@ -10,6 +10,8 @@ import (
 )
 
 func TestTodo(t *testing.T) {
+	t.Parallel()
+
 	// Create a new request
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
@@ -27,6 +29,8 @@ func TestTodo(t *testing.T) {
 }
 
 func TestHealthCheck(t *testing.T) {
+	t.Parallel()
+
 	// Create a new request
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rr := httptest.NewRecorder()

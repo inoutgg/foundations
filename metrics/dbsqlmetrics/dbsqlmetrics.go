@@ -1,4 +1,4 @@
-package sqldbmetrics
+package dbsqlmetrics
 
 import (
 	"cmp"
@@ -19,7 +19,7 @@ const (
 type stats struct {
 	meter                   metric.Meter
 	acquireCount            metric.Int64ObservableCounter
-	acquireDuration         metric.Int64Histogram
+	// acquireDuration         metric.Int64Histogram
 	acquiredConns           metric.Int64ObservableCounter
 	canceledAcquireCount    metric.Int64ObservableCounter
 	constructingConns       metric.Int64ObservableCounter
@@ -34,9 +34,9 @@ type stats struct {
 
 func newStats(meter metric.Meter) *stats {
 	return &stats{
-		meter:                   meter,
-		acquireCount:            must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("acquire_count"), metric.WithDescription("Number of acquire operations"))),
-		acquireDuration:         must.Must(meter.Int64Histogram(metrics.FormatMetricName("acquire_duration"), metric.WithDescription("Duration of acquire operations"))),
+		meter:        meter,
+		acquireCount: must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("acquire_count"), metric.WithDescription("Number of acquire operations"))),
+		// acquireDuration:         must.Must(meter.Int64Histogram(metrics.FormatMetricName("acquire_duration"), metric.WithDescription("Duration of acquire operations"))),
 		acquiredConns:           must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("acquired_conns"), metric.WithDescription("Number of acquired connections"))),
 		canceledAcquireCount:    must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("canceled_acquire_count"), metric.WithDescription("Number of canceled acquire operations"))),
 		constructingConns:       must.Must(meter.Int64ObservableCounter(metrics.FormatMetricName("constructing_conns"), metric.WithDescription("Number of connections being constructed"))),

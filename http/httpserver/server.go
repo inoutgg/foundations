@@ -35,7 +35,7 @@ type Config struct {
 	ACMEHosts  []string
 }
 
-// New creates a new HTTP server using the provded config.
+// New creates a new HTTP server using the provided config.
 func New(config *Config) *Server {
 	debug.Assert(config.Handler != nil, "expected Handler to be configured")
 
@@ -106,8 +106,19 @@ func (s *Server) listenAndServeTLS() error {
 		HostPolicy: autocert.HostWhitelist(s.config.ACMEHosts...),
 	}
 
-	srv80 := &http.Server{Handler: m.HTTPHandler(nil)}
-	srv443 := &http.Server{Handler: s.config.Handler}
+	baseContext := func(net.Listener) context.Context {
+		// TODO(roman@vanesyan.com): use this to accept shutdown context instead.
+		return context.Background()
+	}
+
+	srv80 := &http.Server{
+		Handler:     m.HTTPHandler(nil),
+		BaseContext: baseContext,
+	}
+	srv443 := &http.Server{
+		Handler:     s.config.Handler,
+		BaseContext: baseContext,
+	}
 
 	g.Go(func() error {
 		l, err := listener(80)

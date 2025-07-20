@@ -1,4 +1,4 @@
-package sqldb
+package dbsql
 
 import (
 	"errors"
@@ -14,7 +14,7 @@ const (
 
 // IsUniqueViolationError returns true if the error is a unique violation error.
 func IsUniqueViolationError(err error) bool {
-	pgxErr := &pgconn.PgError{}
+	var pgxErr *pgconn.PgError
 	if errors.As(err, &pgxErr) {
 		return pgxErr.Code == ErrCodeUniqueViolation
 	}

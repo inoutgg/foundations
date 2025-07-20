@@ -10,12 +10,18 @@ import (
 )
 
 var (
-	// FormDecoder is used to decode url.Values in the DecodeForm.
-	FormDecoder = form.NewDecoder()
+	// DefaultFormDecoder is used to decode url.Values in the DecodeForm.
+	DefaultFormDecoder = form.NewDecoder()
 
-	// Validator is used both for JSON and Form validation.
-	Validator = validator.New(validator.WithRequiredStructEnabled())
+	// DefaultValidator is used both for JSON and Form validation.
+	DefaultValidator = validator.New(validator.WithRequiredStructEnabled())
 )
+
+// DecodeJSONOptions is used to configure the DecodeJSON function.
+type DecodeJSONOptions struct {
+	// Validator is the validator to use for validation.
+	Validator *validator.Validate
+}
 
 // DecodeJSON converts a JSON body from the incoming request r into the struct v.
 //
@@ -23,19 +29,34 @@ var (
 //
 // Use validation tags from the github.com/go-playground/validator/v10 for
 // setting validation.
-func DecodeJSON[T any](r *http.Request) (*T, error) {
+func DecodeJSON[T any](r *http.Request, opts *DecodeJSONOptions) (*T, error) {
 	ctx := r.Context()
+
+	validator := DefaultValidator
+	if opts != nil {
+		if opts.Validator != nil {
+			validator = opts.Validator
+		}
+	}
 
 	var v T
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
 		return nil, fmt.Errorf("foundations/httprequest: unable to decode JSON: %w", err)
 	}
 
-	if err := Validator.StructCtx(ctx, v); err != nil {
+	if err := validator.StructCtx(ctx, v); err != nil {
 		return nil, err
 	}
 
 	return &v, nil
+}
+
+type DecodeFormOptions struct {
+	// Validator is the validator to use for validation.
+	Validator *validator.Validate
+
+	// Decoder is the decoder to use for decoding.
+	Decoder *form.Decoder
 }
 
 // DecodeForm converts a url.Values (including form values) from the incoming
@@ -45,20 +66,32 @@ func DecodeJSON[T any](r *http.Request) (*T, error) {
 //
 // Use validation tags from the github.com/go-playground/validator/v10 for
 // setting validation.
-func DecodeForm[T any](r *http.Request) (*T, error) {
+func DecodeForm[T any](r *http.Request, opts *DecodeFormOptions) (*T, error) {
 	ctx := r.Context()
 	if err := r.ParseForm(); err != nil {
 		return nil, fmt.Errorf("foundations/httprequest: unable to parse form request: %w", err)
 	}
 
+	decode := DefaultFormDecoder
+	validate := DefaultValidator
+	if opts != nil {
+		if opts.Decoder != nil {
+			decode = opts.Decoder
+		}
+
+		if opts.Validator != nil {
+			validate = opts.Validator
+		}
+	}
+
 	var v T
 	values := r.Form
 
-	if err := FormDecoder.Decode(&v, values); err != nil {
+	if err := decode.Decode(&v, values); err != nil {
 		return nil, err
 	}
 
-	if err := Validator.StructCtx(ctx, &v); err != nil {
+	if err := validate.StructCtx(ctx, &v); err != nil {
 		return nil, err
 	}
 

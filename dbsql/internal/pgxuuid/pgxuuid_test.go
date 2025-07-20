@@ -1,27 +1,20 @@
 // The encoder is registered automatically for sqldbtest.DB via sqldb.WithUUID
 // so no need to register it here.
-package pgxuuid_test
+package pgxuuid
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.inout.gg/foundations/sqldb/sqldbtest"
 )
 
 func TestCodecDecodeValue(t *testing.T) {
-	ctx := context.Background()
-	db := sqldbtest.Must(ctx, t)
-
 	pool := db.Pool()
 	original, err := uuid.NewV7()
 	require.NoError(t, err)
 
-	print("here")
-
-	rows, err := pool.Query(ctx, `select $1::uuid`, original)
+	rows, err := pool.Query(t.Context(), `select $1::uuid`, original)
 	require.NoError(t, err)
 
 	for rows.Next() {
@@ -36,7 +29,7 @@ func TestCodecDecodeValue(t *testing.T) {
 
 	require.NoError(t, rows.Err())
 
-	rows, err = pool.Query(ctx, `select $1::uuid`, nil)
+	rows, err = pool.Query(t.Context(), `select $1::uuid`, nil)
 	require.NoError(t, err)
 
 	for rows.Next() {
@@ -51,9 +44,7 @@ func TestCodecDecodeValue(t *testing.T) {
 }
 
 func TestArray(t *testing.T) {
-	ctx := context.Background()
-	db := sqldbtest.Must(ctx, t)
-	p := db.Pool()
+	pool := db.Pool()
 
 	inputSlice := []uuid.UUID{}
 
@@ -64,7 +55,7 @@ func TestArray(t *testing.T) {
 	}
 
 	var outputSlice []uuid.UUID
-	err := p.QueryRow(ctx, `select $1::uuid[]`, inputSlice).Scan(&outputSlice)
+	err := pool.QueryRow(t.Context(), `select $1::uuid[]`, inputSlice).Scan(&outputSlice)
 	require.NoError(t, err)
 	require.Equal(t, inputSlice, outputSlice)
 }

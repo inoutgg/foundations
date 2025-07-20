@@ -58,15 +58,20 @@ func Set(w http.ResponseWriter, name, value string, options ...func(*Option)) {
 		o(&opt)
 	}
 
-	http.SetCookie(w, &http.Cookie{
+	//nolint:exhaustruct
+	cookie := &http.Cookie{
 		Name:     name,
 		Value:    value,
 		Path:     opt.Path,
 		Domain:   opt.Domain,
 		HttpOnly: opt.HttpOnly,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  time.Now().Add(opt.ExpiresIn),
-	})
+		SameSite: opt.SameSite,
+	}
+	if opt.ExpiresIn != 0 {
+		cookie.Expires = time.Now().Add(opt.ExpiresIn)
+	}
+
+	http.SetCookie(w, cookie)
 }
 
 // Delete deletes the cookie with the given name if it exists.
