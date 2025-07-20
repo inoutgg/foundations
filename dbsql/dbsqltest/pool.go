@@ -152,6 +152,8 @@ type DBPool struct {
 }
 
 func New(config *DBPoolConfig) (*DBPool, error) {
+	debug.Assert(config != nil, "config must not be nil")
+
 	dbPool := &DBPool{}
 
 	pool, err := puddle.NewPool(&puddle.Config[*DB]{

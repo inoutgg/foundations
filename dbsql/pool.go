@@ -20,8 +20,8 @@ func WithSearchPath(schema string) func(c *pgxpool.Config) {
 	return func(c *pgxpool.Config) { c.ConnConfig.RuntimeParams["search_path"] = schema }
 }
 
-// WithUUID adds native support for converting between Postgres UUID and google/uuid.
-func WithUUID() func(c *pgxpool.Config) {
+// WithUUIDCodec adds native support for converting between Postgres UUID and google/uuid.
+func WithUUIDCodec() func(c *pgxpool.Config) {
 	return func(c *pgxpool.Config) {
 		origAfterConnect := c.AfterConnect
 		c.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
@@ -40,8 +40,6 @@ func MustPool(ctx context.Context, connString string, cfgs ...func(*pgxpool.Conf
 }
 
 // NewPool creates a new connection pool using the provided connection string.
-//
-// Optional cfgs like WithUUID or WithTracer can be provided.
 func NewPool(
 	ctx context.Context,
 	connStr string,
@@ -61,6 +59,7 @@ func NewPool(
 	return NewPoolWithConfig(ctx, cfg)
 }
 
+// NewPoolWithConfig creates a new connection pool using the provided configuration.
 func NewPoolWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

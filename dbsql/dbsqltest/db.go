@@ -1,4 +1,4 @@
-// Package sqldbtest provides utilities for testing database-related code.
+// Package dbsqltest provides utilities for testing database-related code.
 //
 // It offers a set of utility functions to initialize a database pool,
 // load DDL schema, clean it up, and perform other testing-related tasks.
@@ -11,11 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.inout.gg/foundations/debug"
 )
 
 const (
@@ -42,31 +44,30 @@ type (
 	Down func(context.Context, *wrapper) error
 )
 
-type DBConfig struct {
-	poolConfig *pgxpool.Config
-	Up         Up
-	Down       Down
-}
-
 // DB is a wrapper around pgxpool.Pool with useful utilities for DB management
 // in tests.
 type DB struct {
 	*wrapper
+
 	poolConfig *pgxpool.Config
 	pool       *pgxpool.Pool
 
-	up        Up
-	down      Down
 	closeOnce sync.Once
+
+	up   Up
+	down Down
 }
 
-func NewDB(ctx context.Context, config *DBConfig) (*DB, error) {
+// NewDB creates a new DB instance with the given configuration.
+func NewDB(ctx context.Context, poolConfig *pgxpool.Config) (*DB, error) {
+	debug.Assert(poolConfig != nil, "poolConfig is required")
+
+	//nolint:exhaustruct
 	db := &DB{
-		poolConfig: config.poolConfig,
+		poolConfig: poolConfig,
 		closeOnce:  sync.Once{},
-		up:         config.Up,
-		down:       config.Down,
 	}
+
 	if err := db.recreatePool(ctx); err != nil {
 		return nil, err
 	}
@@ -74,13 +75,65 @@ func NewDB(ctx context.Context, config *DBConfig) (*DB, error) {
 	return db, nil
 }
 
+// NewDBWithContainer creates a new DB instance with the given configuration.
+//
+// The opts are optional configuration functions that modify the pool configuration.
+func NewDBWithContainer(ctx context.Context, opts ...func(*pgxpool.Config)) (*DB, func(context.Context) error, error) {
+	var err error
+
+	connString, close, err := makeContainer(ctx, 1)
+	if err != nil {
+		return nil, nil, fmt.Errorf("sqldbtest: failed to create container: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = close(ctx)
+		}
+	}()
+
+	poolConfig, err := pgxpool.ParseConfig(connString)
+	if err != nil {
+		return nil, nil, fmt.Errorf("sqldbtest: failed to parse connection string: %w", err)
+	}
+
+	for _, opt := range opts {
+		opt(poolConfig)
+	}
+
+	db, err := NewDB(ctx, poolConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("sqldbtest: failed to create database pool: %w", err)
+	}
+
+	return db, close, err
+}
+
+// Up sets the up migration function. Up is called on each db.Reset().
+func (db *DB) Up(fn Up) { db.up = fn }
+
+// Down sets the down migration function. Down is called on each db.Reset().
+func (db *DB) Down(fn Down) { db.down = fn }
+
+// Reset resets the database by calling the provided Down function
+// followed by the Up function.
+//
+// It is typically used before running tests that require a clean database state.
 func (db *DB) Reset(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*15)
+	defer cancel()
+
 	if db.down != nil {
-		return db.down(ctx, db.wrapper)
+		err := db.down(ctx, db.wrapper)
+		if err != nil {
+			return fmt.Errorf("foundations/dbsqltest: failed to reset database: %w", err)
+		}
 	}
 
 	if db.up != nil {
-		return db.up(ctx, db.wrapper)
+		err := db.up(ctx, db.wrapper)
+		if err != nil {
+			return fmt.Errorf("foundations/dbsqltest: failed to reset database: %w", err)
+		}
 	}
 
 	return nil
@@ -90,7 +143,31 @@ func (db *DB) Reset(ctx context.Context) error {
 func (db *DB) Pool() *pgxpool.Pool { return db.pool }
 
 // Close closes the DB connection.
+//
+// Any future calls to this method will be ignored.
 func (db *DB) Close() { db.closeOnce.Do(db.close) }
+
+// WithTx runs the provided function within a transaction.
+//
+// It is useful for running multiple tests in parallel.
+func (db *DB) WithTx(ctx context.Context, fn func(pgx.Tx) error) error {
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("foundations/dbsqltest: failed to start transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("foundations/dbsqltest: failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (db *DB) close() { db.pool.Close() }
 
 type wrapper struct {
@@ -100,7 +177,7 @@ type wrapper struct {
 
 func (db *wrapper) Executor() Executor { return db.executor }
 
-// TruncateTable truncates the given table.
+// TruncateTable truncates the specified table.
 func (db *wrapper) TruncateTable(ctx context.Context, table string) error {
 	tx, err := db.executor.Begin(ctx)
 	if err != nil {
@@ -119,7 +196,7 @@ func (db *wrapper) TruncateTable(ctx context.Context, table string) error {
 	return nil
 }
 
-// truncateTable wipes the specified table within the given transaction.
+// truncateTable truncates the specified table within the given transaction.
 func (db *wrapper) truncateTable(ctx context.Context, table string, tx pgx.Tx) error {
 	if _, err := tx.Exec(ctx, queryTruncateTable(table)); err != nil {
 		return fmt.Errorf("foundations/sqldbtest: failed to truncate table %s: %w", table, err)
@@ -128,7 +205,7 @@ func (db *wrapper) truncateTable(ctx context.Context, table string, tx pgx.Tx) e
 	return nil
 }
 
-// TruncateTables truncates the given tables.
+// TruncateTables truncates the specified tables.
 func (db *wrapper) TruncateTables(ctx context.Context, tables []string) error {
 	tx, err := db.executor.Begin(ctx)
 	if err != nil {
@@ -190,7 +267,7 @@ func (db *wrapper) dropTable(ctx context.Context, table string, tx pgx.Tx) error
 	return nil
 }
 
-// DropAllTables drops all tables available in the schema.
+// DropAllTables drops all tables in the schema.
 func (db *wrapper) DropAllTables(ctx context.Context) error {
 	tables, err := db.fetchAllTables(ctx)
 	if err != nil {
@@ -221,11 +298,11 @@ func (db *wrapper) DropAllTables(ctx context.Context) error {
 	return nil
 }
 
-// fetchAllTables returns a list of all tables available in the schema.
+// fetchAllTables returns a list of all tables in the schema.
 func (db *wrapper) fetchAllTables(ctx context.Context) ([]string, error) {
 	schema := db.schema
 	if schema == "" {
-		// pg uses "public" as default schema.
+		// PostgreSQL uses "public" as the default schema.
 		schema = "public"
 	}
 
