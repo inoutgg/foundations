@@ -1,7 +1,0 @@
-DROP TABLE IF EXISTS tests;
-CREATE TABLE IF NOT EXISTS tests (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  description VARCHAR(255),
-  status VARCHAR(255)
-);

@@ -13,8 +13,8 @@ var kCtxKey = ctxKey{}
 
 var ErrDBPoolNotFound = errors.New("foundations/sqldb: failed to retrieve db pool from context.")
 
-// WithContext returns a new context with the given pool.
-func WithContext(ctx context.Context, pool *pgxpool.Pool) context.Context {
+// WithPool returns a new context with the given pool.
+func WithPool(ctx context.Context, pool *pgxpool.Pool) context.Context {
 	return context.WithValue(ctx, kCtxKey, pool)
 }
 

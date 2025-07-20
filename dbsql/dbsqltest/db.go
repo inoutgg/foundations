@@ -83,7 +83,7 @@ func NewDBWithContainer(ctx context.Context, opts ...func(*pgxpool.Config)) (*DB
 
 	connString, close, err := makeContainer(ctx, 1)
 	if err != nil {
-		return nil, nil, fmt.Errorf("sqldbtest: failed to create container: %w", err)
+		return nil, nil, fmt.Errorf("foundations/dbsqltest: failed to create container: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -93,7 +93,7 @@ func NewDBWithContainer(ctx context.Context, opts ...func(*pgxpool.Config)) (*DB
 
 	poolConfig, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		return nil, nil, fmt.Errorf("sqldbtest: failed to parse connection string: %w", err)
+		return nil, nil, fmt.Errorf("foundations/dbsqltest: failed to parse connection string: %w", err)
 	}
 
 	for _, opt := range opts {
@@ -102,7 +102,7 @@ func NewDBWithContainer(ctx context.Context, opts ...func(*pgxpool.Config)) (*DB
 
 	db, err := NewDB(ctx, poolConfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("sqldbtest: failed to create database pool: %w", err)
+		return nil, nil, fmt.Errorf("foundations/dbsqltest: failed to create database pool: %w", err)
 	}
 
 	return db, close, err
@@ -170,6 +170,8 @@ func (db *DB) WithTx(ctx context.Context, fn func(pgx.Tx) error) error {
 
 func (db *DB) close() { db.pool.Close() }
 
+// wrapper provides database utilities for managing tables and schema operations.
+// It wraps an Executor interface and includes schema information for table operations.
 type wrapper struct {
 	schema   string
 	executor Executor
@@ -181,7 +183,7 @@ func (db *wrapper) Executor() Executor { return db.executor }
 func (db *wrapper) TruncateTable(ctx context.Context, table string) error {
 	tx, err := db.executor.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to start transaction: %w", err)
+		return fmt.Errorf("foundations/dbsqltest: failed to start transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -190,7 +192,7 @@ func (db *wrapper) TruncateTable(ctx context.Context, table string) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to commit transaction: %w", err)
+		return fmt.Errorf("foundations/dbsqltest: failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -199,7 +201,7 @@ func (db *wrapper) TruncateTable(ctx context.Context, table string) error {
 // truncateTable truncates the specified table within the given transaction.
 func (db *wrapper) truncateTable(ctx context.Context, table string, tx pgx.Tx) error {
 	if _, err := tx.Exec(ctx, queryTruncateTable(table)); err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to truncate table %s: %w", table, err)
+		return fmt.Errorf("foundations/dbsqltest: failed to truncate table %s: %w", table, err)
 	}
 
 	return nil
@@ -209,7 +211,7 @@ func (db *wrapper) truncateTable(ctx context.Context, table string, tx pgx.Tx) e
 func (db *wrapper) TruncateTables(ctx context.Context, tables []string) error {
 	tx, err := db.executor.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to start transaction: %w", err)
+		return fmt.Errorf("foundations/dbsqltest: failed to start transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -225,7 +227,7 @@ func (db *wrapper) TruncateTables(ctx context.Context, tables []string) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to commit transaction: %w", err)
+		return fmt.Errorf("foundations/dbsqltest: failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -245,14 +247,18 @@ func (db *wrapper) TruncateAllTables(ctx context.Context) error {
 func (db *wrapper) DropTables(ctx context.Context, tables []string) error {
 	tx, err := db.executor.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to start transaction: %w", err)
+		return fmt.Errorf("foundations/dbsqltest: failed to start transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	for _, t := range tables {
 		if _, err := tx.Exec(ctx, queryDropTable(t)); err != nil {
-			return fmt.Errorf("foundations/sqldbtest: failed to drop table %s: %w", t, err)
+			return fmt.Errorf("foundations/dbsqltest: failed to drop table %s: %w", t, err)
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("foundations/dbsqltest: failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -261,7 +267,7 @@ func (db *wrapper) DropTables(ctx context.Context, tables []string) error {
 // dropTable drops a single table from the schema within the given transaction.
 func (db *wrapper) dropTable(ctx context.Context, table string, tx pgx.Tx) error {
 	if _, err := tx.Exec(ctx, queryDropTable(table)); err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to drop table %s: %w", table, err)
+		return fmt.Errorf("foundations/dbsqltest: failed to drop table %s: %w", table, err)
 	}
 
 	return nil
@@ -276,7 +282,7 @@ func (db *wrapper) DropAllTables(ctx context.Context) error {
 
 	tx, err := db.executor.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to start transaction: %w", err)
+		return fmt.Errorf("foundations/dbsqltest: failed to start transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -292,7 +298,7 @@ func (db *wrapper) DropAllTables(ctx context.Context) error {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to commit transaction: %w", err)
+		return fmt.Errorf("foundations/dbsqltest: failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -313,14 +319,14 @@ func (db *wrapper) fetchAllTables(ctx context.Context) ([]string, error) {
 		pgtype.Text{String: schema, Valid: true},
 	)
 	if err != nil {
-		return tables, fmt.Errorf("foundations/sqldbtest: failed to fetch tables: %w", err)
+		return tables, fmt.Errorf("foundations/dbsqltest: failed to fetch tables: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var table pgtype.Text
 		if err := rows.Scan(&table); err != nil {
-			return tables, fmt.Errorf("foundations/sqldbtest: failed to scan table name: %w", err)
+			return tables, fmt.Errorf("foundations/dbsqltest: failed to scan table name: %w", err)
 		}
 
 		tables = append(tables, table.String)
@@ -336,10 +342,10 @@ func (db *DB) recreatePool(ctx context.Context) error {
 
 	pool, err := pgxpool.NewWithConfig(ctx, db.poolConfig)
 	if err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to recreate a pool: %w", err)
+		return fmt.Errorf("foundations/dbsqltest: failed to recreate a pool: %w", err)
 	}
 	if err := pool.Ping(ctx); err != nil {
-		return fmt.Errorf("foundations/sqldbtest: failed to ping the database: %w", err)
+		return fmt.Errorf("foundations/dbsqltest: failed to ping the database: %w", err)
 	}
 
 	schema := db.poolConfig.ConnConfig.RuntimeParams["search_path"]
