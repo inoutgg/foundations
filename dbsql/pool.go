@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.inout.gg/foundations/dbsql/internal/pgxuuid"
+	"go.inout.gg/foundations/dbsql/internal/pgxtypeid"
 	"go.inout.gg/foundations/must"
 )
 
@@ -25,7 +25,7 @@ func WithUUIDCodec() func(c *pgxpool.Config) {
 	return func(c *pgxpool.Config) {
 		origAfterConnect := c.AfterConnect
 		c.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-			pgxuuid.Register(conn.TypeMap())
+			pgxtypeid.Register(conn.TypeMap())
 			if origAfterConnect != nil {
 				return origAfterConnect(ctx, conn)
 			}

@@ -1,4 +1,4 @@
-package pgxuuid
+package pgxtypeid
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 
 var db *dbsqltest.DB
 
-func uuidCodec(c *pgxpool.Config) {
+func typeidCodec(c *pgxpool.Config) {
 	origAfterConnect := c.AfterConnect
 	c.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 		Register(conn.TypeMap())
@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 	var close func(context.Context) error
 
 	ctx := context.Background()
-	db, close, err = dbsqltest.NewDBWithContainer(ctx, uuidCodec)
+	db, close, err = dbsqltest.NewDBWithContainer(ctx, typeidCodec)
 	if err != nil {
 		panic(err)
 	}
