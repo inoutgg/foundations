@@ -40,8 +40,8 @@ func queryDropTable(table string) string {
 }
 
 type (
-	Up   func(context.Context, *wrapper) error
-	Down func(context.Context, *wrapper) error
+	Up   func(context.Context, *DB) error
+	Down func(context.Context, *DB) error
 )
 
 // DB is a wrapper around pgxpool.Pool with useful utilities for DB management
@@ -123,14 +123,14 @@ func (db *DB) Reset(ctx context.Context) error {
 	defer cancel()
 
 	if db.down != nil {
-		err := db.down(ctx, db.wrapper)
+		err := db.down(ctx, db)
 		if err != nil {
 			return fmt.Errorf("foundations/dbsqltest: failed to reset database: %w", err)
 		}
 	}
 
 	if db.up != nil {
-		err := db.up(ctx, db.wrapper)
+		err := db.up(ctx, db)
 		if err != nil {
 			return fmt.Errorf("foundations/dbsqltest: failed to reset database: %w", err)
 		}

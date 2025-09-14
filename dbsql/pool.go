@@ -20,8 +20,8 @@ func WithSearchPath(schema string) func(c *pgxpool.Config) {
 	return func(c *pgxpool.Config) { c.ConnConfig.RuntimeParams["search_path"] = schema }
 }
 
-// WithUUIDCodec adds native support for converting between Postgres UUID and google/uuid.
-func WithUUIDCodec() func(c *pgxpool.Config) {
+// WithTypeIDCpdec adds native support for converting for typeid-go.
+func WithTypeIDCpdec() func(c *pgxpool.Config) {
 	return func(c *pgxpool.Config) {
 		origAfterConnect := c.AfterConnect
 		c.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
