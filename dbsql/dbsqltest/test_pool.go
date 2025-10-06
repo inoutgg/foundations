@@ -18,7 +18,17 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-type TestPoolManager struct {
+type TestPoolFactoryConfig struct {
+	MaxPools       int64
+	CleanupTimeout time.Duration
+}
+
+func (p *TestPoolFactoryConfig) defaults() {
+	p.MaxPools = int64(runtime.GOMAXPROCS(0))
+	p.CleanupTimeout = time.Second * 5
+}
+
+type TestPoolFactory struct {
 	conn           *pgx.Conn
 	poolConfig     *pgxpool.Config
 	sema           *semaphore.Weighted
@@ -29,26 +39,16 @@ type TestPoolManager struct {
 	mu             sync.Mutex
 }
 
-type TestPoolManagerConfig struct {
-	MaxPools       int64
-	CleanupTimeout time.Duration
-}
-
-func (p *TestPoolManagerConfig) defaults() {
-	p.MaxPools = int64(runtime.GOMAXPROCS(0))
-	p.CleanupTimeout = time.Second * 5
-}
-
-// NewPoolManager initializes a new template database.
-func NewPoolManager(
+// NewTestPoolFactory initializes a new template database.
+func NewTestPoolFactory(
 	ctx context.Context,
 	connString string,
 	up Up,
-	config *TestPoolManagerConfig,
-) (*TestPoolManager, error) {
+	config *TestPoolFactoryConfig,
+) (*TestPoolFactory, error) {
 	if config == nil {
 		//nolint:exhaustruct
-		config = &TestPoolManagerConfig{}
+		config = &TestPoolFactoryConfig{}
 	}
 
 	config.defaults()
@@ -59,7 +59,7 @@ func NewPoolManager(
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse connection string: %w", err)
+		return nil, fmt.Errorf("dbsqltest: failed to parse connection string: %w", err)
 	}
 
 	var (
@@ -70,7 +70,7 @@ func NewPoolManager(
 
 	conn, err := pgx.ConnectConfig(ctx, connConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("dbsqltest: failed to connect to database: %w", err)
 	}
 
 	h := fnv.New64()
@@ -82,19 +82,19 @@ func NewPoolManager(
 
 	releaseLock, err := takeLock(ctx, conn, templateName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to take lock: %w", err)
+		return nil, fmt.Errorf("dbsqltest: failed to take lock: %w", err)
 	}
 
 	if err := mkTemplate(ctx, conn, user, templateName); err != nil {
-		return nil, fmt.Errorf("failed to create database template: %w", err)
+		return nil, fmt.Errorf("dbsqltest: failed to create database template: %w", err)
 	}
 
 	if err := releaseLock(); err != nil {
-		return nil, fmt.Errorf("failed to release lock: %w", err)
+		return nil, fmt.Errorf("dbsqltest: failed to release lock: %w", err)
 	}
 
 	//nolint:exhaustruct
-	return &TestPoolManager{
+	return &TestPoolFactory{
 		conn:           conn,
 		cleanupTimeout: config.CleanupTimeout,
 		poolConfig:     poolConfig,
@@ -110,7 +110,7 @@ func NewPoolManager(
 //
 // PoolManager waits on distributed mutex for the database to be available.
 // Once the database is available, it returns a new pool.
-func (pm *TestPoolManager) Pool(tb testing.TB) *pgxpool.Pool {
+func (pm *TestPoolFactory) Pool(tb testing.TB) *pgxpool.Pool {
 	tb.Helper()
 
 	ctx := tb.Context()
@@ -149,13 +149,13 @@ func (pm *TestPoolManager) Pool(tb testing.TB) *pgxpool.Pool {
 	return pool
 }
 
-func (pm *TestPoolManager) Close(ctx context.Context) {
+func (pm *TestPoolFactory) Close(ctx context.Context) {
 	pm.closeOnce.Do(func() {
 		pm.close(ctx)
 	})
 }
 
-func (pm *TestPoolManager) close(ctx context.Context) {
+func (pm *TestPoolFactory) close(ctx context.Context) {
 	pm.mu.Lock()
 
 	for _, pool := range pm.openPools {
@@ -167,10 +167,10 @@ func (pm *TestPoolManager) close(ctx context.Context) {
 	_ = pm.conn.Close(ctx)
 }
 
-func (pm *TestPoolManager) allocate(ctx context.Context) (*pgxpool.Pool, string, error) {
+func (pm *TestPoolFactory) allocate(ctx context.Context) (*pgxpool.Pool, string, error) {
 	dbNameID, err := typeid.Generate(namesgenerator.GetRandomName(0))
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to generate database name: %w", err)
+		return nil, "", fmt.Errorf("dbsqltest: failed to generate database name: %w", err)
 	}
 
 	var (
@@ -181,18 +181,18 @@ func (pm *TestPoolManager) allocate(ctx context.Context) (*pgxpool.Pool, string,
 	config.ConnConfig.Database = dbName
 
 	if err = copyTemplate(ctx, pm.conn, pm.templateName, dbName); err != nil {
-		return nil, "", fmt.Errorf("failed to initialize database: %w", err)
+		return nil, "", fmt.Errorf("dbsqltest: failed to initialize database: %w", err)
 	}
 
 	p, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create a pool: %w", err)
+		return nil, "", fmt.Errorf("dbsqltest: failed to create a pool: %w", err)
 	}
 
 	if err := p.Ping(ctx); err != nil {
 		p.Close()
 
-		return nil, "", fmt.Errorf("failed to ping database: %w", err)
+		return nil, "", fmt.Errorf("dbsqltest: failed to ping database: %w", err)
 	}
 
 	return p, dbName, nil
@@ -204,12 +204,12 @@ func takeLock(ctx context.Context, db DBTX, name string) (func() error, error) {
 	lockNum := int64(h.Sum32())
 
 	if _, err := db.Exec(ctx, "SELECT pg_advisory_lock($1::BIGINT)", lockNum); err != nil {
-		return nil, fmt.Errorf("failed to acquire lock: %w", err)
+		return nil, fmt.Errorf("dbsqltest: failed to acquire lock: %w", err)
 	}
 
 	return func() error {
 		if _, err := db.Exec(ctx, "SELECT pg_advisory_unlock($1::BIGINT)", lockNum); err != nil {
-			return fmt.Errorf("failed to release lock: %w", err)
+			return fmt.Errorf("dbsqltest: failed to release lock: %w", err)
 		}
 
 		return nil
@@ -225,7 +225,7 @@ func mkTemplate(ctx context.Context, db DBTX, user, dbName string) error {
 	if err := db.
 		QueryRow(ctx, "SELECT exists(SELECT 1 FROM pg_database WHERE datname = $1)", dbName).
 		Scan(&doesExist); err != nil {
-		return fmt.Errorf("failed to check if template exists: %w", err)
+		return fmt.Errorf("dbsqltest: failed to check if template exists: %w", err)
 	}
 
 	// Template has already been created, skipping setup.
@@ -234,18 +234,18 @@ func mkTemplate(ctx context.Context, db DBTX, user, dbName string) error {
 	}
 
 	if _, err := db.Exec(ctx, "DROP DATABASE IF EXISTS $1", dbName); err != nil {
-		return fmt.Errorf("failed to drop existing database template: %w", err)
+		return fmt.Errorf("dbsqltest: failed to drop existing database template: %w", err)
 	}
 
 	if _, err := db.Exec(ctx, "CREATE DATABASE $1 OWNER $2", dbName, user); err != nil {
-		return fmt.Errorf("failed to create database template: %w", err)
+		return fmt.Errorf("dbsqltest: failed to create database template: %w", err)
 	}
 
 	if _, err := db.Exec(
 		ctx,
 		"UPDATE pg_database SET datistemplate = true WHERE datname = $1", dbName,
 	); err != nil {
-		return fmt.Errorf("failed to finalize database template: %w", err)
+		return fmt.Errorf("dbsqltest: failed to finalize database template: %w", err)
 	}
 
 	return nil
@@ -253,7 +253,7 @@ func mkTemplate(ctx context.Context, db DBTX, user, dbName string) error {
 
 func copyTemplate(ctx context.Context, dbtx DBTX, dst, src string) error {
 	if _, err := dbtx.Exec(ctx, "CREATE DATABASE $1 TEMPLATE $2", dst, src); err != nil {
-		return fmt.Errorf("failed to copy database template: %w", err)
+		return fmt.Errorf("dbsqltest: failed to copy database template: %w", err)
 	}
 
 	return nil
