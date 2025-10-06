@@ -4,14 +4,13 @@ import (
 	"context"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.inout.gg/foundations/dbsql/dbsqltest"
+	"go.inout.gg/foundations/must"
 )
 
-var db *dbsqltest.DB
+var pool *pgxpool.Pool //nolint:gochecknoglobals
 
 func typeidCodec(c *pgxpool.Config) {
 	origAfterConnect := c.AfterConnect
@@ -25,25 +24,13 @@ func typeidCodec(c *pgxpool.Config) {
 }
 
 func TestMain(m *testing.M) {
-	var err error
-	var close func(context.Context) error
-
 	ctx := context.Background()
-	db, close, err = dbsqltest.NewDBWithContainer(ctx, typeidCodec)
-	if err != nil {
-		panic(err)
-	}
 
-	closeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
+	pool = must.Must(pgxpool.New(ctx, "postgresql://test:test@localhost:5432/postgres"))
+	defer pool.Close()
+
+	must.Must1(pool.Ping(ctx))
 
 	code := m.Run()
-
-	// Teardown
-	closeErr := close(closeCtx)
-	if closeErr != nil {
-		panic(closeErr)
-	}
-
 	os.Exit(code)
 }

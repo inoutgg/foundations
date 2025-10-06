@@ -17,8 +17,8 @@ const (
 )
 
 type stats struct {
-	meter                   metric.Meter
-	acquireCount            metric.Int64ObservableCounter
+	meter        metric.Meter
+	acquireCount metric.Int64ObservableCounter
 	// acquireDuration         metric.Int64Histogram
 	acquiredConns           metric.Int64ObservableCounter
 	canceledAcquireCount    metric.Int64ObservableCounter

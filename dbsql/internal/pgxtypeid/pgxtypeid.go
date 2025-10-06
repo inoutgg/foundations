@@ -36,8 +36,8 @@ func (id TypeID) TextValue() (pgtype.Text, error) {
 }
 
 func TryWrapTypeIDEncodePlan(
-	value interface{},
-) (plan pgtype.WrappedEncodePlanNextSetter, nextValue interface{}, ok bool) {
+	value any,
+) (plan pgtype.WrappedEncodePlanNextSetter, nextValue any, ok bool) {
 	switch value := value.(type) {
 	case typeid.TypeID:
 		return &wrapTypeIDEncodePlan{}, TypeID(value), true
@@ -52,13 +52,13 @@ type wrapTypeIDEncodePlan struct {
 
 func (plan *wrapTypeIDEncodePlan) SetNext(next pgtype.EncodePlan) { plan.next = next }
 
-func (plan *wrapTypeIDEncodePlan) Encode(value interface{}, buf []byte) (newBuf []byte, err error) {
+func (plan *wrapTypeIDEncodePlan) Encode(value any, buf []byte) (newBuf []byte, err error) {
 	return plan.next.Encode(TypeID(value.(typeid.TypeID)), buf)
 }
 
 func TryWrapTypeIDScanPlan(
-	target interface{},
-) (plan pgtype.WrappedScanPlanNextSetter, nextDst interface{}, ok bool) {
+	target any,
+) (plan pgtype.WrappedScanPlanNextSetter, nextDst any, ok bool) {
 	switch target := target.(type) {
 	case *typeid.TypeID:
 		return &wrapTypeIDScanPlan{}, (*TypeID)(target), true
@@ -73,7 +73,7 @@ type wrapTypeIDScanPlan struct {
 
 func (plan *wrapTypeIDScanPlan) SetNext(next pgtype.ScanPlan) { plan.next = next }
 
-func (plan *wrapTypeIDScanPlan) Scan(src []byte, dst interface{}) error {
+func (plan *wrapTypeIDScanPlan) Scan(src []byte, dst any) error {
 	return plan.next.Scan(src, (*TypeID)(dst.(*typeid.TypeID)))
 }
 

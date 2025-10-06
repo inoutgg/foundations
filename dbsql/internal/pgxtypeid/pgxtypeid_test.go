@@ -1,4 +1,4 @@
-// The encoder is registered automatically for sqldbtest.DB via sqldb.WithUUID
+// The encoder is registered automatically for sqldbtest.DB via dbsql.WithTypeID
 // so no need to register it here.
 package pgxtypeid
 
@@ -11,8 +11,6 @@ import (
 
 func TestValue(t *testing.T) {
 	t.Parallel()
-
-	pool := db.Pool()
 
 	t.Run("value", func(t *testing.T) {
 		t.Parallel()
@@ -54,10 +52,8 @@ func TestValue(t *testing.T) {
 func TestArray(t *testing.T) {
 	t.Parallel()
 
-	pool := db.Pool()
-
 	var expected []typeid.TypeID
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		u, err := typeid.Generate("test")
 
 		require.NoError(t, err)

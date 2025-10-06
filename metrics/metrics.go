@@ -1,4 +1,4 @@
-package metrics 
+package metrics
 
 const (
 	prefix = "foundations."

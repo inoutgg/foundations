@@ -1,8 +1,6 @@
 version: "2"
-
 run:
   timeout: 10m
-
 formatters:
   enable:
     - gci
@@ -10,17 +8,14 @@ formatters:
     - gofumpt
     - goimports
     - golines
-
   settings:
     gofmt:
       rewrite-rules:
         - pattern: "interface{}"
           replacement: "any"
-
     golines:
       max-len: 120
       tab-len: 8
-
     gci:
       sections:
         - blank
@@ -28,7 +23,6 @@ formatters:
         - default
         - localmodule
         - dot
-
 linters:
   default: all
   disable:
@@ -46,7 +40,6 @@ linters:
     - nestif # detects nested if statements, stupid
     - nlreturn # blank lines after return statements, annoying
     - testpackage # requires to create tests in separate packages like package_test
-
   exclusions:
     generated: lax
     presets:
@@ -54,12 +47,10 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
-
     rules:
       - path: _test\.go
         linters:
           - exhaustruct
-
   settings:
     depguard:
       rules:
@@ -77,36 +68,28 @@ linters:
               desc: use "github.com/google/uuid"
     exhaustive:
       default-signifies-exhaustive: true
-
     sloglint:
       context: all
-
     # report only misuses of `t.Parallel()`
     paralleltest:
       ignore-missing: true
       ignore-missing-subtests: true
-
     tagliatelle:
       case:
         rules:
           json: camel
-
     testifylint:
       enable-all: true
-
     govet:
       enable-all: true
       disable:
         - shadow
-
     nolintlint:
       require-explanation: true
       require-specific: true
-
     exhaustruct:
       exclude:
         - github.com/jackc/pgx/v5/pgtype.Numeric
-
     varnamelen:
       ignore-names:
         - a # comparison argument

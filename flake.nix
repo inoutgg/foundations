@@ -2,48 +2,98 @@
   description = "foundations - a modular library designed to build maintainable production-grade systems.";
 
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    devenv.url = "github:cachix/devenv";
+    nixpkgs.url = "github:cachix/devenv-nixpkgs/rolling";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    flake-root.url = "github:srid/flake-root";
   };
 
   outputs =
     {
-      nixpkgs,
-      flake-utils,
+      flake-parts,
       ...
-    }:
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = import nixpkgs { inherit system; };
-      in
-      {
+    }@inputs:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      flake = { };
 
-        devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            # Runtimes
-            nodejs
-            go
+      systems = [
+        "x86_64-linux"
+        "x86_64-darwin"
+        "aarch64-linux"
+        "aarch64-darwin"
+      ];
 
-            # Tools
-            sqlc
-            typos
-            mockgen
-            just
-            golangci-lint
-            golint
+      imports = [
+        inputs.flake-root.flakeModule
+        inputs.treefmt-nix.flakeModule
+        inputs.devenv.flakeModule
+      ];
 
-            # LSP
-            typos-lsp
-            golangci-lint-langserver
-          ];
+      perSystem =
+        {
+          pkgs,
+          lib,
+          config,
+          ...
+        }:
+        {
+          formatter = config.treefmt.build.wrapper;
+
+          treefmt.config = {
+            inherit (config.flake-root) projectRootFile;
+            package = pkgs.treefmt;
+
+            programs = {
+              nixfmt.enable = true;
+              gofumpt.enable = true;
+              yamlfmt.enable = true;
+            };
+          };
+
+          devenv.shells.default = {
+            containers = lib.mkForce { };
+
+            packages = with pkgs; [
+              watchexec
+              just
+              lefthook
+              typos
+
+              gcc
+              gotools
+              govulncheck
+              golangci-lint
+              mockgen
+            ];
+
+            languages.go = {
+              enable = true;
+              package = pkgs.go_1_25;
+            };
+
+            env.GOTOOLCHAIN = lib.mkForce "local";
+            env.GOFUMPT_SPLIT_LONG_LINES = lib.mkForce "on";
+
+            languages.javascript = {
+              enable = true;
+              npm.enable = true;
+            };
+
+            services.postgres = {
+              enable = true;
+              package = pkgs.postgresql_17;
+
+              initialScript = ''
+                CREATE USER test SUPERUSER PASSWORD 'test';
+              '';
+              listen_addresses = "localhost";
+              port = 5432;
+              settings = {
+                max_prepared_transactions = 262143;
+              };
+            };
+          };
         };
-
-        shellHook = ''
-          export GOTOOLCHAIN="local"
-        '';
-
-        formatter = pkgs.nixfmt-rfc-style;
-      }
-    );
+    };
 }
