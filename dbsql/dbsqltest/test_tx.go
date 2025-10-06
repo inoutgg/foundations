@@ -3,6 +3,7 @@ package dbsqltest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ func NewTestTxFactory(db DBTX) TestTxFactory {
 func NewTestTxFactoryFromConnString(ctx context.Context, connString string) (TestTxFactory, func(), error) {
 	pool, err := pgxpool.New(ctx, connString)
 	if err != nil {
-		return TestTxFactory{}, nil, err
+		return TestTxFactory{}, nil, fmt.Errorf("dbsqltest: failed to create connection pool: %w", err)
 	}
 
 	return NewTestTxFactory(pool), pool.Close, nil

@@ -4,13 +4,14 @@ import (
 	"cmp"
 	"net/http"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
 	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/http/httpmiddleware"
 	"go.inout.gg/foundations/metrics"
 	"go.inout.gg/foundations/must"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 )
 
 const (
@@ -52,8 +53,8 @@ func (c *Config) defaults() {
 	c.Provider = cmp.Or(c.Provider, otel.GetMeterProvider())
 }
 
-// Middleware returns a middleware that captures metrics for incoming HTTP requests.
-func Middleware(cfg *Config) httpmiddleware.MiddlewareFunc {
+// NewMiddleware returns a middleware that captures metrics for incoming HTTP requests.
+func NewMiddleware(cfg *Config) httpmiddleware.MiddlewareFunc {
 	cfg.defaults()
 	debug.Assert(cfg.Provider != nil, "provider is nil")
 
@@ -62,8 +63,8 @@ func Middleware(cfg *Config) httpmiddleware.MiddlewareFunc {
 		stats = newStats(meter)
 	)
 
-	return httpmiddleware.MiddlewareFunc(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return httpmiddleware.MiddlewareFunc(func(_ http.Handler) http.Handler {
+		return http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 			finishInflightRequest := stats.RecordInflightRequest(r)
 			defer finishInflightRequest()
 		})

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/felixge/httpsnoop"
+
 	"go.inout.gg/foundations/http/httpmiddleware"
 )
 

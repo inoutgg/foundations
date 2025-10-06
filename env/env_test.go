@@ -1,6 +1,7 @@
 package env
 
 import (
+	"errors"
 	"os"
 	"testing"
 
@@ -9,8 +10,8 @@ import (
 
 type Config struct {
 	Config1 string `env:"CONFIG1"`
-	Config2 int    `env:"CONFIG2"`
 	Config3 string `env:"CONFIG3"`
+	Config2 int    `env:"CONFIG2"`
 }
 
 func TestLoad(t *testing.T) {
@@ -64,9 +65,9 @@ func TestLoad(t *testing.T) {
 		t.Setenv("NON_ZERO_FLOAT", "1")
 
 		type Config struct {
-			NonZeroFoat    float32 `env:"NON_ZERO_FLOAT"   validate:"required"`
 			NonEmptyString string  `env:"NON_EMPTY_STRING" validate:"required"`
 			NonZeroInt     int     `env:"NON_ZERO_INT"     validate:"required"`
+			NonZeroFoat    float32 `env:"NON_ZERO_FLOAT"   validate:"required"`
 		}
 
 		_, err := Load[Config]()
@@ -74,7 +75,13 @@ func TestLoad(t *testing.T) {
 			t.Fatal("expected error")
 		}
 
-		errs := err.(validator.ValidationErrors)
+		errs := func() validator.ValidationErrors {
+			var target validator.ValidationErrors
+
+			_ = errors.As(err, &target)
+
+			return target
+		}()
 		if len(errs) != 2 {
 			t.Fatalf("expected 2 errors, got %d", len(errs))
 		}
@@ -85,6 +92,8 @@ func TestLoad(t *testing.T) {
 }
 
 func validate[T comparable](t *testing.T, key string, expected T, got T) {
+	t.Helper()
+
 	if expected != got {
 		t.Errorf(
 			"Mismatch for key '%v', expected '%v', got '%#v'",

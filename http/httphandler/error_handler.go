@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"errors"
 	"net/http"
 
 	"go.inout.gg/foundations/http/httperror"
@@ -48,9 +49,12 @@ func WithErrorHandler(errorHandler ErrorHandler) func(HandlerFunc) http.HandlerF
 }
 
 // DefaultErrorHandler is the default error handler.
-var DefaultErrorHandler = ErrorHandlerFunc(func(w http.ResponseWriter, r *http.Request, err error) {
-	if err, ok := err.(httperror.HttpError); ok {
-		http.Error(w, err.Error(), err.StatusCode())
+//
+//nolint:gochecknoglobals
+var DefaultErrorHandler = ErrorHandlerFunc(func(w http.ResponseWriter, _ *http.Request, err error) {
+	var herr httperror.HTTPError
+	if errors.As(err, &herr) {
+		http.Error(w, herr.Error(), herr.StatusCode())
 		return
 	}
 

@@ -14,6 +14,7 @@ func caller(skip int) string {
 	f, _ := cf.Next()
 
 	var caller string
+
 	if f.File != "" {
 		file, line := f.File, f.Line
 		dir, file := filepath.Split(file)

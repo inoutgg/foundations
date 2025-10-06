@@ -2,6 +2,8 @@ package startstop
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 )
@@ -16,35 +18,36 @@ type Starter interface {
 // SIGTERM signal is received.
 //
 // An optional signal can be provided to override the default SIGTERM signal.
-func StartBlocking(ctx context.Context, starter Starter, sg ...os.Signal) error {
+func StartBlocking(ctx context.Context, starter Starter, sig ...os.Signal) error {
 	serviceCtx, serviceCancel := context.WithCancelCause(ctx)
 	defer serviceCancel(nil)
 
-	if len(sg) == 0 {
-		sg = []os.Signal{os.Interrupt}
+	if len(sig) == 0 {
+		sig = []os.Signal{os.Interrupt}
 	}
 
 	sigCh := make(chan os.Signal, 1)
 
-	signal.Notify(sigCh, sg...)
+	signal.Notify(sigCh, sig...)
 
 	go func(ctx context.Context) {
 		<-sigCh
+
 		err := starter.Stop(ctx)
 		serviceCancel(err)
 	}(serviceCtx)
 
-	go func(ctx context.Context) {
+	go func() {
 		if err := starter.Start(serviceCtx); err != nil {
 			serviceCancel(err)
 		}
-	}(serviceCtx)
+	}()
 
 	// Wait for the starter to shutdown
 	<-serviceCtx.Done()
 
-	if err := context.Cause(serviceCtx); err != nil && err != context.Canceled {
-		return err
+	if err := context.Cause(serviceCtx); err != nil && !errors.Is(err, context.Canceled) {
+		return fmt.Errorf("startstop: failed to start service: %w", err)
 	}
 
 	return nil

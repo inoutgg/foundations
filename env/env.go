@@ -7,11 +7,12 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/go-playground/validator/v10"
 	dotenv "github.com/joho/godotenv"
+
 	"go.inout.gg/foundations/must"
 )
 
 // Validator is the default validator used to validate the configuration.
-var Validator = validator.New(validator.WithRequiredStructEnabled())
+var Validator = validator.New(validator.WithRequiredStructEnabled()) //nolint:gochecknoglobals
 
 // Load loads the environment configuration into a struct T.
 //
@@ -33,6 +34,7 @@ func Load[T any](paths ...string) (*T, error) {
 	}
 
 	if err := Validator.Struct(config); err != nil {
+		//nolint:wrapcheck // validation specialized error
 		return nil, err
 	}
 

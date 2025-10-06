@@ -3,6 +3,7 @@ package htmltemplate
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"go.inout.gg/foundations/http/httpmiddleware"
@@ -11,9 +12,9 @@ import (
 
 type ctxKey struct{}
 
-var kCtxKey = ctxKey{}
+var kCtxKey = ctxKey{} //nolint:gochecknoglobals
 
-// Middleware
+// Middleware.
 func Middleware(r Renderer) httpmiddleware.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -27,12 +28,14 @@ func Render(w http.ResponseWriter, req *http.Request, name string, vars ...any) 
 	render, ok := req.Context().Value(kCtxKey).(Renderer)
 	if !ok {
 		return errors.New(
-			"htmltemplate: unable to retrieve render from request context. Make sure to use corresponding middleware.",
+			"htmltemplate: unable to retrieve render from request context. Make sure to use corresponding middleware",
 		)
 	}
+
 	if err := render.Render(w, name, vars); err != nil {
-		return err
+		return fmt.Errorf("htmltemplate: failed to render template %q: %w", name, err)
 	}
+
 	return nil
 }
 

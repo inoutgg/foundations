@@ -30,8 +30,8 @@ func ipAddressFromForwardedForHeader(req *http.Request) string {
 		return ""
 	}
 
-	possibleIPs := strings.Split(forwardedFor, ",")
-	for _, possibleIP := range possibleIPs {
+	possibleIPs := strings.SplitSeq(forwardedFor, ",")
+	for possibleIP := range possibleIPs {
 		if possibleIP == "" {
 			continue
 		}

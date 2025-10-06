@@ -6,7 +6,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.inout.gg/foundations/dbsql/internal/pgxtypeid"
+
+	// "go.inout.gg/foundations/dbsql/internal/pgxtypeid".
 	"go.inout.gg/foundations/must"
 )
 
@@ -18,20 +19,6 @@ func WithTracer(t pgx.QueryTracer) func(c *pgxpool.Config) {
 // WithSearchPath sets the search path for the database pool.
 func WithSearchPath(schema string) func(c *pgxpool.Config) {
 	return func(c *pgxpool.Config) { c.ConnConfig.RuntimeParams["search_path"] = schema }
-}
-
-// WithTypeIDCpdec adds native support for converting for typeid-go.
-func WithTypeIDCpdec() func(c *pgxpool.Config) {
-	return func(c *pgxpool.Config) {
-		origAfterConnect := c.AfterConnect
-		c.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-			pgxtypeid.Register(conn.TypeMap())
-			if origAfterConnect != nil {
-				return origAfterConnect(ctx, conn)
-			}
-			return nil
-		}
-	}
 }
 
 // MustPool creates a new connection pool and panics on error.
@@ -52,6 +39,7 @@ func NewPool(
 			err,
 		)
 	}
+
 	for _, f := range cfgs {
 		f(cfg)
 	}
@@ -65,6 +53,7 @@ func NewPoolWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool,
 	if err != nil {
 		return nil, fmt.Errorf("foundations/sqldb: failed to create a new database pool: %w", err)
 	}
+
 	defer func() {
 		if err != nil && pool != nil {
 			pool.Close()

@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// 4 spaces
+	// 4 spaces.
 	JSONIndentation = "    "
 )
 

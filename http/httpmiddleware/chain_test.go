@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockMiddleware is a simple middleware that adds a header to the response
+// mockMiddleware is a simple middleware that adds a header to the response.
 type mockMiddleware struct {
 	key, value string
 }
@@ -23,10 +23,10 @@ func (m mockMiddleware) Middleware(next http.Handler) http.Handler {
 
 func TestChain(t *testing.T) {
 	tests := []struct {
+		expectedHeaders map[string][]string
 		name            string
 		middlewares     []Middleware
 		expectedStatus  int
-		expectedHeaders map[string][]string
 	}{
 		{
 			name:            "Empty chain",
@@ -62,15 +62,16 @@ func TestChain(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			chain := NewChain(tt.middlewares...)
-			handler := chain.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := chain.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.expectedStatus)
 			}))
 
-			req := httptest.NewRequest("GET", "/", nil)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
 
 			assert.Equal(t, tt.expectedStatus, rec.Code)
+
 			for key, values := range tt.expectedHeaders {
 				assert.Equal(t, values, rec.Header()[key])
 			}
@@ -85,11 +86,11 @@ func TestChainExtend(t *testing.T) {
 	chain := NewChain(m1)
 	extendedChain := chain.Extend(m2)
 
-	handler := extendedChain.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := extendedChain.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

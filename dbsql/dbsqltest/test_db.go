@@ -19,16 +19,14 @@ import (
 )
 
 type TestPoolManager struct {
-	conn         *pgx.Conn
-	templateName string
-
-	cleanupTimeout time.Duration
+	conn           *pgx.Conn
 	poolConfig     *pgxpool.Config
-
-	sema      *semaphore.Weighted // semaphore for limiting concurrent pool creation
-	mu        sync.Mutex
-	openPools map[string]*pgxpool.Pool
-	closeOnce sync.Once
+	sema           *semaphore.Weighted
+	openPools      map[string]*pgxpool.Pool
+	templateName   string
+	cleanupTimeout time.Duration
+	closeOnce      sync.Once
+	mu             sync.Mutex
 }
 
 type TestPoolManagerConfig struct {
@@ -41,11 +39,18 @@ func (p *TestPoolManagerConfig) defaults() {
 	p.CleanupTimeout = time.Second * 5
 }
 
-// NewPoolManager initializes a new template database
-func NewPoolManager(ctx context.Context, connString string, up Up, config *TestPoolManagerConfig) (*TestPoolManager, error) {
+// NewPoolManager initializes a new template database.
+func NewPoolManager(
+	ctx context.Context,
+	connString string,
+	up Up,
+	config *TestPoolManagerConfig,
+) (*TestPoolManager, error) {
 	if config == nil {
+		//nolint:exhaustruct
 		config = &TestPoolManagerConfig{}
 	}
+
 	config.defaults()
 
 	poolConfig, err := pgxpool.ParseConfig(connString)
@@ -79,12 +84,16 @@ func NewPoolManager(ctx context.Context, connString string, up Up, config *TestP
 	if err != nil {
 		return nil, fmt.Errorf("failed to take lock: %w", err)
 	}
-	defer releaseLock()
 
 	if err := mkTemplate(ctx, conn, user, templateName); err != nil {
 		return nil, fmt.Errorf("failed to create database template: %w", err)
 	}
 
+	if err := releaseLock(); err != nil {
+		return nil, fmt.Errorf("failed to release lock: %w", err)
+	}
+
+	//nolint:exhaustruct
 	return &TestPoolManager{
 		conn:           conn,
 		cleanupTimeout: config.CleanupTimeout,
@@ -129,7 +138,8 @@ func (pm *TestPoolManager) Pool(tb testing.TB) *pgxpool.Pool {
 
 		ctx, cancel := context.WithTimeout(ctx, pm.cleanupTimeout)
 		defer cancel()
-		_, _ = pm.conn.Exec(ctx, fmt.Sprintf("DROP DATABASE %s", dbName))
+
+		_, _ = pm.conn.Exec(ctx, "DROP DATABASE "+dbName)
 
 		pm.mu.Lock()
 		delete(pm.openPools, dbName)
@@ -137,6 +147,24 @@ func (pm *TestPoolManager) Pool(tb testing.TB) *pgxpool.Pool {
 	})
 
 	return pool
+}
+
+func (pm *TestPoolManager) Close(ctx context.Context) {
+	pm.closeOnce.Do(func() {
+		pm.close(ctx)
+	})
+}
+
+func (pm *TestPoolManager) close(ctx context.Context) {
+	pm.mu.Lock()
+
+	for _, pool := range pm.openPools {
+		pool.Close()
+	}
+
+	pm.mu.Unlock()
+
+	_ = pm.conn.Close(ctx)
 }
 
 func (pm *TestPoolManager) allocate(ctx context.Context) (*pgxpool.Pool, string, error) {
@@ -168,24 +196,6 @@ func (pm *TestPoolManager) allocate(ctx context.Context) (*pgxpool.Pool, string,
 	}
 
 	return p, dbName, nil
-}
-
-func (pm *TestPoolManager) Close(ctx context.Context) {
-	pm.closeOnce.Do(func() {
-		pm.close(ctx)
-	})
-}
-
-func (pm *TestPoolManager) close(ctx context.Context) {
-	pm.mu.Lock()
-
-	for _, pool := range pm.openPools {
-		pool.Close()
-	}
-
-	pm.mu.Unlock()
-
-	_ = pm.conn.Close(ctx)
 }
 
 func takeLock(ctx context.Context, db DBTX, name string) (func() error, error) {

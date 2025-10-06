@@ -7,8 +7,8 @@ import (
 
 var ErrMalformedToken = errors.New("foundations/token: invalid format")
 
-// TokenFromBearerString returns the token from a bearer token string.
-func TokenFromBearerString(str string) (string, error) {
+// FromBearerString returns the token from a bearer token string.
+func FromBearerString(str string) (string, error) {
 	if !strings.HasPrefix(str, "Bearer ") {
 		return "", ErrMalformedToken
 	}

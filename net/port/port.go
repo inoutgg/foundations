@@ -23,5 +23,6 @@ func Free() (int, error) {
 	}
 	defer l.Close()
 
+	//nolint:forcetypeassert // no need to check type
 	return l.Addr().(*net.TCPAddr).Port, nil
 }

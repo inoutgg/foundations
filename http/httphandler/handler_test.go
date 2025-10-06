@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTodo(t *testing.T) {
@@ -24,7 +25,7 @@ func TestTodo(t *testing.T) {
 
 	// Check response body
 	body, err := io.ReadAll(rr.Body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "todo", string(body), "handler returned unexpected body")
 }
 
@@ -43,6 +44,6 @@ func TestHealthCheck(t *testing.T) {
 
 	// Check response body
 	body, err := io.ReadAll(rr.Body)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "ok", string(body), "handler returned unexpected body")
 }

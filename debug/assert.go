@@ -9,7 +9,6 @@ import "fmt"
 // Assert calls are ignore when "noassert" build tag is provided.
 func Assert(condition bool, m string, args ...any) {
 	if !condition {
-
 		c := caller(3) // [caller, closure, Debuglog]
 		panic(fmt.Errorf("%s: %s", c, fmt.Sprintf(m, args...)))
 	}

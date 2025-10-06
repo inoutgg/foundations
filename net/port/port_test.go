@@ -16,7 +16,9 @@ func TestFree(t *testing.T) {
 		t.Fatal("port.Free() returned 0")
 	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", p))
+	var cfg net.ListenConfig
+
+	l, err := cfg.Listen(t.Context(), "tcp", fmt.Sprintf(":%d", p))
 	if err != nil {
 		t.Fatal(err)
 	}

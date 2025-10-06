@@ -3,6 +3,7 @@ package httprequest
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,16 +16,18 @@ import (
 )
 
 type NestedField struct {
-	BoolField bool `json:"bool_field" form:"bool_field"`
+	BoolField bool `form:"bool_field" json:"bool_field"` //nolint:tagliatelle // test
 }
 
 type Body struct {
-	StringField string      `json:"string_field" form:"string_field" validate:"required"`
-	IntField    int         `json:"int_field"    form:"int_field"`
-	NestedField NestedField `json:"nested_field" form:"nested_field"`
+	StringField string      `form:"string_field" json:"string_field" validate:"required"` //nolint:tagliatelle // test
+	IntField    int         `form:"int_field"    json:"int_field"`                        //nolint:tagliatelle // test
+	NestedField NestedField `form:"nested_field" json:"nested_field"`                     //nolint:tagliatelle // test
 }
 
 func encodeJSON(t *testing.T, val any) []byte {
+	t.Helper()
+
 	bytes, err := json.Marshal(val)
 	if err != nil {
 		t.Fatal(err)
@@ -34,6 +37,8 @@ func encodeJSON(t *testing.T, val any) []byte {
 }
 
 func requestJSON(t *testing.T, val any) *http.Request {
+	t.Helper()
+
 	return httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(encodeJSON(t, val)))
 }
 
@@ -76,12 +81,15 @@ func TestJSON(t *testing.T) {
 
 	t.Run("it validates result", func(t *testing.T) {
 		r := requestJSON(t, Body{})
+
 		_, err := DecodeJSON[Body](r, nil)
 		if err == nil {
 			t.Fatal("expected validation error")
 		}
 
-		validationErr, ok := err.(validator.ValidationErrors)
+		var validationErr validator.ValidationErrors
+
+		ok := errors.As(err, &validationErr)
 		if !ok {
 			t.Fatal(fmt.Errorf("expected validation error got %T", err))
 		}
@@ -99,6 +107,7 @@ func TestForm(t *testing.T) {
 			"int_field":               {"1"},
 			"nested_field.bool_field": {"true"},
 		})
+
 		body, err := DecodeForm[Body](r, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -128,12 +137,15 @@ func TestForm(t *testing.T) {
 
 	t.Run("it validates result", func(t *testing.T) {
 		r := requestForm(url.Values{})
+
 		_, err := DecodeForm[Body](r, nil)
 		if err == nil {
 			t.Fatal("expected validation error")
 		}
 
-		validationErr, ok := err.(validator.ValidationErrors)
+		var validationErr validator.ValidationErrors
+
+		ok := errors.As(err, &validationErr)
 		if !ok {
 			t.Fatal(fmt.Errorf("expected validation error got %T", err))
 		}

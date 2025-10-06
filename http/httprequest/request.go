@@ -11,10 +11,10 @@ import (
 
 var (
 	// DefaultFormDecoder is used to decode url.Values in the DecodeForm.
-	DefaultFormDecoder = form.NewDecoder()
+	DefaultFormDecoder = form.NewDecoder() //nolint:gochecknoglobals
 
 	// DefaultValidator is used both for JSON and Form validation.
-	DefaultValidator = validator.New(validator.WithRequiredStructEnabled())
+	DefaultValidator = validator.New(validator.WithRequiredStructEnabled()) //nolint:gochecknoglobals
 )
 
 // DecodeJSONOptions is used to configure the DecodeJSON function.
@@ -33,6 +33,7 @@ func DecodeJSON[T any](r *http.Request, opts *DecodeJSONOptions) (*T, error) {
 	ctx := r.Context()
 
 	validator := DefaultValidator
+
 	if opts != nil {
 		if opts.Validator != nil {
 			validator = opts.Validator
@@ -45,6 +46,7 @@ func DecodeJSON[T any](r *http.Request, opts *DecodeJSONOptions) (*T, error) {
 	}
 
 	if err := validator.StructCtx(ctx, v); err != nil {
+		//nolint:wrapcheck // validation specialized error
 		return nil, err
 	}
 
@@ -74,6 +76,7 @@ func DecodeForm[T any](r *http.Request, opts *DecodeFormOptions) (*T, error) {
 
 	decode := DefaultFormDecoder
 	validate := DefaultValidator
+
 	if opts != nil {
 		if opts.Decoder != nil {
 			decode = opts.Decoder
@@ -85,13 +88,15 @@ func DecodeForm[T any](r *http.Request, opts *DecodeFormOptions) (*T, error) {
 	}
 
 	var v T
+
 	values := r.Form
 
 	if err := decode.Decode(&v, values); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("foundations/httprequest: unable to decode form: %w", err)
 	}
 
 	if err := validate.StructCtx(ctx, &v); err != nil {
+		//nolint:wrapcheck // returns specialized error
 		return nil, err
 	}
 

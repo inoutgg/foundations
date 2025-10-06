@@ -18,12 +18,12 @@ func Get(r *http.Request, name string) string {
 
 // Option is a set of options for setting a cookie.
 type Option struct {
-	ExpiresIn time.Duration
 	Domain    string
+	Path      string
+	ExpiresIn time.Duration
+	SameSite  http.SameSite
 	Secure    bool
-	HttpOnly  bool
-	SameSite  http.SameSite // optional (default to: http.SameSiteLaxMode)
-	Path      string        // optional (default to: "/")
+	HTTPOnly  bool
 }
 
 // WithExpiresIn sets the ExpiresIn option on the cookie.
@@ -31,8 +31,8 @@ func WithExpiresIn(expiresIn time.Duration) func(*Option) {
 	return func(opt *Option) { opt.ExpiresIn = expiresIn }
 }
 
-// WithHttpOnly sets the HttpOnly flag on the cookie.
-func WithHttpOnly(opt *Option) { opt.HttpOnly = true }
+// WithHTTPOnly sets the HttpOnly flag on the cookie.
+func WithHTTPOnly(opt *Option) { opt.HTTPOnly = true }
 
 // WithSecure sets the Secure flag on the cookie.
 func WithSecure(opt *Option) { opt.Secure = true }
@@ -49,6 +49,7 @@ func WithDomain(domain string) func(*Option) {
 
 // Set sets the cookie with the given name and value.
 func Set(w http.ResponseWriter, name, value string, options ...func(*Option)) {
+	//nolint:exhaustruct
 	opt := Option{
 		SameSite: http.SameSiteDefaultMode,
 		Path:     "/",
@@ -64,7 +65,7 @@ func Set(w http.ResponseWriter, name, value string, options ...func(*Option)) {
 		Value:    value,
 		Path:     opt.Path,
 		Domain:   opt.Domain,
-		HttpOnly: opt.HttpOnly,
+		HttpOnly: opt.HTTPOnly,
 		SameSite: opt.SameSite,
 	}
 	if opt.ExpiresIn != 0 {
@@ -83,6 +84,7 @@ func Delete(w http.ResponseWriter, r *http.Request, name string) {
 
 	http.SetCookie(
 		w,
+		//nolint:exhaustruct
 		&http.Cookie{
 			Name:     name,
 			Value:    "",

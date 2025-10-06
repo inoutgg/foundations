@@ -21,18 +21,18 @@ type Engine interface {
 }
 
 type engine struct {
+	template  *template.Template
 	root      string
 	extension string
-	template  *template.Template
 }
 
 type EngineConfig struct {
+	Funcs     template.FuncMap
 	Root      string
 	Extension string
-	Funcs     template.FuncMap
 }
 
-// NewEngine creates a a new Engine backed by template/html.
+// NewEngine creates a new Engine backed by template/html.
 func NewEngine(config *EngineConfig) Engine {
 	tpl := template.New(config.Root).Funcs(config.Funcs)
 
@@ -44,7 +44,7 @@ func NewEngine(config *EngineConfig) Engine {
 }
 
 func (e *engine) ParseFS(f fs.FS) error {
-	return fs.WalkDir(f, e.root, func(path string, entry fs.DirEntry, err error) error {
+	err := fs.WalkDir(f, e.root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("htmltemplate: failed to parse templates directory: %w", err)
 		}
@@ -60,6 +60,7 @@ func (e *engine) ParseFS(f fs.FS) error {
 
 		name := strings.TrimSuffix(filepath.ToSlash(rel), e.extension)
 		tpl := e.template.New(name)
+
 		content, err := fs.ReadFile(f, path)
 		if err != nil {
 			return fmt.Errorf("htmltemplate: failed to read template %q: %w", name, err)
@@ -71,9 +72,14 @@ func (e *engine) ParseFS(f fs.FS) error {
 
 		return nil
 	})
+	if err != nil {
+		return fmt.Errorf("htmltemplate: failed to parse templates directory: %w", err)
+	}
+
+	return nil
 }
 
-func (e *engine) Execute(w io.Writer, name string, vars interface{}) error {
+func (e *engine) Execute(w io.Writer, name string, vars any) error {
 	tpl, err := e.lookup(name)
 	if err != nil {
 		return fmt.Errorf("htmltemplate: failed to execute template %q: %w", name, err)

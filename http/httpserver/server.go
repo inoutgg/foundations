@@ -4,15 +4,17 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"time"
 
-	"go.inout.gg/foundations/debug"
-	"go.inout.gg/foundations/startstop"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
+
+	"go.inout.gg/foundations/debug"
+	"go.inout.gg/foundations/startstop"
 )
 
 var _ startstop.Starter = (*Server)(nil)
@@ -25,14 +27,10 @@ type Server struct {
 }
 
 type Config struct {
-	Handler http.Handler
-
-	// If EnableACME flag is this option is ignored.
-	Port int
-
-	// If EnableACME is true, then the server will use Let's Encrypt to automatically.
-	EnableACME bool
+	Handler    http.Handler
 	ACMEHosts  []string
+	Port       int
+	EnableACME bool
 }
 
 // New creates a new HTTP server using the provided config.
@@ -40,8 +38,10 @@ func New(config *Config) *Server {
 	debug.Assert(config.Handler != nil, "expected Handler to be configured")
 
 	return &Server{
-		log:    slog.Default().With("name", "Server"),
-		config: config,
+		log:      slog.Default().With("name", "Server"),
+		config:   config,
+		launched: false,
+		servers:  make([]*http.Server, 0, 2),
 	}
 }
 
@@ -53,10 +53,10 @@ func (s *Server) Start(ctx context.Context) error {
 	s.launched = true
 
 	if s.config.EnableACME {
-		return s.listenAndServeTLS()
+		return s.listenAndServeTLS(ctx)
 	}
 
-	return s.listenAndServe()
+	return s.listenAndServe(ctx)
 }
 
 func (s *Server) Stop(ctx context.Context) error {
@@ -68,6 +68,7 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	go func() {
 		<-shutdownCtx.Done()
+
 		if shutdownCtx.Err() == context.DeadlineExceeded {
 			s.log.ErrorContext(shutdownCtx, "Server shutdown timed out")
 		}
@@ -77,15 +78,20 @@ func (s *Server) Stop(ctx context.Context) error {
 
 	for _, srv := range s.servers {
 		csrv := srv
+
 		g.Go(func() error {
 			return csrv.Shutdown(shutdownCtx)
 		})
 	}
 
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("httpserver: failed to stop servers: %w", err)
+	}
+
+	return nil
 }
 
-func (s *Server) listenAndServe() error {
+func (s *Server) listenAndServe(ctx context.Context) error {
 	srv := &http.Server{Handler: s.config.Handler}
 
 	l, err := listener(s.config.Port)
@@ -95,11 +101,13 @@ func (s *Server) listenAndServe() error {
 
 	s.servers = append(s.servers, srv)
 
-	return s.serve(l, srv)
+	return s.serve(ctx, l, srv)
 }
 
-func (s *Server) listenAndServeTLS() error {
+func (s *Server) listenAndServeTLS(ctx context.Context) error {
 	var g errgroup.Group
+
+	//nolint:exhaustruct
 	m := &autocert.Manager{
 		Cache:      autocert.DirCache(".cache"),
 		Prompt:     autocert.AcceptTOS,
@@ -126,7 +134,7 @@ func (s *Server) listenAndServeTLS() error {
 			return err
 		}
 
-		return s.serve(l, srv80)
+		return s.serve(ctx, l, srv80)
 	})
 
 	g.Go(func() error {
@@ -135,29 +143,37 @@ func (s *Server) listenAndServeTLS() error {
 			return err
 		}
 
-		return s.serve(l, srv443)
+		return s.serve(ctx, l, srv443)
 	})
 
 	s.servers = append(s.servers, srv80, srv443)
 
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("httpserver: failed to start servers: %w", err)
+	}
+
+	return nil
 }
 
-func (s *Server) serve(l net.Listener, srv *http.Server) error {
-	s.log.Info("Starting server", "addr", l.Addr().String())
+func (s *Server) serve(ctx context.Context, l net.Listener, srv *http.Server) error {
+	s.log.InfoContext(ctx, "Starting server", "addr", l.Addr().String())
+
 	err := srv.Serve(l)
 	if err != nil && err != http.ErrServerClosed {
-		s.log.Error("Server failed to start", "error", err)
-		return err
+		s.log.ErrorContext(ctx, "Server failed to start", "error", err)
+		return fmt.Errorf("httpserver: failed to start server on %s: %w", l.Addr().String(), err)
 	}
 
 	return nil
 }
 
 func listener(port int) (net.Listener, error) {
-	listener, err := net.ListenTCP("tcp", &net.TCPAddr{Port: port})
+	listener, err := net.ListenTCP(
+		"tcp",
+		//nolint:exhaustruct
+		&net.TCPAddr{Port: port})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("httpserver: failed to start listener on port %d: %w", port, err)
 	}
 
 	return listener, nil
@@ -169,6 +185,7 @@ func listenerTLS(port int, m *autocert.Manager) (net.Listener, error) {
 		return nil, err
 	}
 
+	//nolint:exhaustruct
 	l = tls.NewListener(l, &tls.Config{
 		MinVersion:     tls.VersionTLS12,
 		GetCertificate: m.GetCertificate,

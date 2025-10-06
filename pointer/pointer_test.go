@@ -19,6 +19,7 @@ func TestToValue(t *testing.T) {
 
 	t.Run("nil pointer", func(t *testing.T) {
 		var ptr *int
+
 		defaultValue := 10
 
 		result := ToValue(ptr, defaultValue)
@@ -50,6 +51,7 @@ func TestFromValue(t *testing.T) {
 		type TestStruct struct {
 			Field string
 		}
+
 		value := TestStruct{Field: "test"}
 
 		result := FromValue(value)

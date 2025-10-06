@@ -25,5 +25,9 @@ func New(f fs.FS, e Engine) (Renderer, error) {
 }
 
 func (r *renderer) Render(w io.Writer, name string, data any) error {
-	return r.engine.Execute(w, name, data)
+	if err := r.engine.Execute(w, name, data); err != nil {
+		return fmt.Errorf("htmltemplate: failed to render template %q: %w", name, err)
+	}
+
+	return nil
 }
