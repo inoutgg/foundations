@@ -75,11 +75,6 @@
             env.GOTOOLCHAIN = lib.mkForce "local";
             env.GOFUMPT_SPLIT_LONG_LINES = lib.mkForce "on";
 
-            languages.javascript = {
-              enable = true;
-              npm.enable = true;
-            };
-
             services.postgres = {
               enable = true;
               package = pkgs.postgresql_17;
@@ -89,9 +84,6 @@
               '';
               listen_addresses = "localhost";
               port = 5432;
-              settings = {
-                max_prepared_transactions = 262143;
-              };
             };
           };
         };
