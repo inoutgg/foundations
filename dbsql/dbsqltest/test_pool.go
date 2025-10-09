@@ -1,11 +1,14 @@
 package dbsqltest
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"hash/fnv"
+	"log"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -19,242 +22,334 @@ import (
 )
 
 type TestPoolFactoryConfig struct {
-	MaxPools       int64
-	CleanupTimeout time.Duration
+	maxPoolSize    int64
+	cleanupTimeout time.Duration
 }
 
 func (p *TestPoolFactoryConfig) defaults() {
-	p.MaxPools = int64(runtime.GOMAXPROCS(0))
-	p.CleanupTimeout = time.Second * 5
+	p.maxPoolSize = int64(runtime.GOMAXPROCS(0))
+	p.cleanupTimeout = time.Second * 5
+}
+
+type TestPoolFactoryOptions func(*TestPoolFactoryConfig)
+
+func WithCleanupTimeout(timeout time.Duration) func(*TestPoolFactoryConfig) {
+	return func(config *TestPoolFactoryConfig) { config.cleanupTimeout = timeout }
+}
+
+func WithMaxPools(n int64) func(*TestPoolFactoryConfig) {
+	return func(config *TestPoolFactoryConfig) { config.maxPoolSize = n }
 }
 
 type TestPoolFactory struct {
-	conn           *pgx.Conn
-	poolConfig     *pgxpool.Config
+	mc             *pgx.Conn
+	baseConfig     *pgxpool.Config
 	sema           *semaphore.Weighted
-	openPools      map[string]*pgxpool.Pool
-	templateName   string
+	template       string
 	cleanupTimeout time.Duration
-	closeOnce      sync.Once
 	mu             sync.Mutex
 }
 
-// NewTestPoolFactory initializes a new template database.
+// NewTestPoolFactory creates a new factory for managing test database pools.
 func NewTestPoolFactory(
 	ctx context.Context,
 	connString string,
-	up Up,
-	config *TestPoolFactoryConfig,
+	migrator Migrator,
+	opts ...TestPoolFactoryOptions,
 ) (*TestPoolFactory, error) {
-	if config == nil {
-		//nolint:exhaustruct
-		config = &TestPoolFactoryConfig{}
+	config := TestPoolFactoryConfig{}
+	for _, opt := range opts {
+		opt(&config)
 	}
 
 	config.defaults()
 
-	poolConfig, err := pgxpool.ParseConfig(connString)
-	if poolConfig.ConnConfig.Database != "" {
-		poolConfig.ConnConfig.Database = ""
-	}
-
+	baseConfig, err := pgxpool.ParseConfig(connString)
 	if err != nil {
 		return nil, fmt.Errorf("dbsqltest: failed to parse connection string: %w", err)
 	}
 
-	var (
-		connConfig = poolConfig.ConnConfig.Copy()
-		user       = connConfig.User
-		password   = connConfig.Password
-	)
-
-	conn, err := pgx.ConnectConfig(ctx, connConfig)
-	if err != nil {
-		return nil, fmt.Errorf("dbsqltest: failed to connect to database: %w", err)
-	}
-
-	h := fnv.New64()
-	h.Write([]byte(user))
-	h.Write([]byte(password))
-	h.Write([]byte(up.Hash()))
-
-	templateName := "test_template_" + strconv.FormatUint(h.Sum64(), 10)
-
-	releaseLock, err := takeLock(ctx, conn, templateName)
-	if err != nil {
-		return nil, fmt.Errorf("dbsqltest: failed to take lock: %w", err)
-	}
-
-	if err := mkTemplate(ctx, conn, user, templateName); err != nil {
-		return nil, fmt.Errorf("dbsqltest: failed to create database template: %w", err)
-	}
-
-	if err := releaseLock(); err != nil {
-		return nil, fmt.Errorf("dbsqltest: failed to release lock: %w", err)
-	}
-
 	//nolint:exhaustruct
-	return &TestPoolFactory{
-		conn:           conn,
-		cleanupTimeout: config.CleanupTimeout,
-		poolConfig:     poolConfig,
+	f := TestPoolFactory{
+		sema:           semaphore.NewWeighted(config.maxPoolSize),
+		cleanupTimeout: config.cleanupTimeout,
+		baseConfig:     baseConfig,
+	}
 
-		templateName: templateName,
-		sema:         semaphore.NewWeighted(config.MaxPools),
-		openPools:    make(map[string]*pgxpool.Pool, config.MaxPools),
-	}, nil
+	if err := f.init(ctx, migrator); err != nil {
+		return nil, fmt.Errorf("dbsqltest: failed to initialize factory: %w", err)
+	}
+
+	return &f, nil
 }
 
-// Pool returns a new pgxpool.Pool initialized from the supplied configuration
-// to the PoolManager.
-//
-// PoolManager waits on distributed mutex for the database to be available.
-// Once the database is available, it returns a new pool.
-func (pm *TestPoolFactory) Pool(tb testing.TB) *pgxpool.Pool {
+// Pool creates a new ephemeral database from the template and returns a pool connected to it.
+// It waits on a semaphore for a database slot to be available, then creates a new database
+// from the template and returns a pool connected to it.
+func (f *TestPoolFactory) Pool(tb testing.TB) *pgxpool.Pool {
 	tb.Helper()
 
-	ctx := tb.Context()
+	var (
+		ctx = tb.Context()
+		db  = typeid.MustGenerate(namesgenerator.GetRandomName(0)).String()
+	)
 
-	err := pm.sema.Acquire(ctx, 1)
+	err := f.sema.Acquire(ctx, 1)
 	require.NoError(tb, err, "failed to acquire semaphore")
 
-	pool, dbName, err := pm.allocate(ctx)
-	pm.mu.Lock()
-	pm.openPools[dbName] = pool
-	pm.mu.Unlock()
+	err = f.createEphemeralDB(ctx, db)
+	require.NoError(tb, err, "failed to create ephemeral database")
 
+	pool, err := f.pool(ctx, db)
 	require.NoError(tb, err)
 
-	// Note that the TB context must not be used in the cleanup function as it
-	// is closed right before cleanup.
+	tb.Logf("running test in database: %s", db)
+
 	tb.Cleanup(func() {
-		pm.sema.Release(1)
+		defer f.sema.Release(1)
+
 		pool.Close()
 
-		// Leave the database template intact if the test failed.
+		// Leave the database intact if the test has failed for debugging
 		if tb.Failed() {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(ctx, pm.cleanupTimeout)
-		defer cancel()
-
-		_, _ = pm.conn.Exec(ctx, "DROP DATABASE "+dbName)
-
-		pm.mu.Lock()
-		delete(pm.openPools, dbName)
-		pm.mu.Unlock()
+		_ = f.dropEphemeralDB(db)
 	})
 
 	return pool
 }
 
-func (pm *TestPoolFactory) Close(ctx context.Context) {
-	pm.closeOnce.Do(func() {
-		pm.close(ctx)
-	})
-}
-
-func (pm *TestPoolFactory) close(ctx context.Context) {
-	pm.mu.Lock()
-
-	for _, pool := range pm.openPools {
-		pool.Close()
-	}
-
-	pm.mu.Unlock()
-
-	_ = pm.conn.Close(ctx)
-}
-
-func (pm *TestPoolFactory) allocate(ctx context.Context) (*pgxpool.Pool, string, error) {
-	dbNameID, err := typeid.Generate(namesgenerator.GetRandomName(0))
-	if err != nil {
-		return nil, "", fmt.Errorf("dbsqltest: failed to generate database name: %w", err)
-	}
-
+// init initializes the factory by creating a template database with a generated
+// template name and user.
+func (f *TestPoolFactory) init(ctx context.Context, migrator Migrator) (err error) {
 	var (
-		dbName = dbNameID.String()
-		config = pm.poolConfig.Copy()
+		user     = f.baseConfig.ConnConfig.User
+		password = f.baseConfig.ConnConfig.Password
 	)
 
-	config.ConnConfig.Database = dbName
+	h := fnv.New64()
+	h.Write([]byte(user))
+	h.Write([]byte(password))
+	h.Write([]byte(migrator.Hash()))
 
-	if err = copyTemplate(ctx, pm.conn, pm.templateName, dbName); err != nil {
-		return nil, "", fmt.Errorf("dbsqltest: failed to initialize database: %w", err)
+	template := "test_template_" + strconv.FormatUint(h.Sum64(), 10)
+	f.template = template
+
+	mc, err := f.mkMaintenanceConn(ctx)
+	if err != nil {
+		return fmt.Errorf("dbsqltest: failed to connect to database: %w", err)
 	}
 
-	p, err := pgxpool.NewWithConfig(ctx, config)
+	// Linearize the creation of database template across multiple processes, since
+	// it is a shared resource and can cause conflicts if multiple processes
+	// try to create it simultaneously.
+	releasePgLock, err := acquirePgLock(ctx, mc, template)
 	if err != nil {
-		return nil, "", fmt.Errorf("dbsqltest: failed to create a pool: %w", err)
+		return fmt.Errorf("dbsqltest: failed to take lock: %w", err)
+	}
+
+	defer func() { err = releasePgLock() }()
+
+	if err := f.mkTemplate(ctx, migrator, user, template); err != nil {
+		return fmt.Errorf("dbsqltest: failed to create database template: %w", err)
+	}
+
+	return err
+}
+
+// newConn creates a new connection to the specified database.
+// If db is empty, connects to the default maintenance database.
+func (f *TestPoolFactory) newConn(ctx context.Context, db string) (*pgx.Conn, error) {
+	connConfig := f.baseConfig.ConnConfig.Copy()
+	connConfig.Database = cmp.Or(db, connConfig.Database)
+
+	conn, err := pgx.ConnectConfig(ctx, connConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	if err := conn.Ping(ctx); err != nil {
+		conn.Close(ctx)
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	return conn, nil
+}
+
+// mkMaintenanceConn returns a maintenance connection, creating/refreshing it if needed.
+// This method is thread-safe.
+func (f *TestPoolFactory) mkMaintenanceConn(ctx context.Context) (*pgx.Conn, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.mc != nil && !f.mc.IsClosed() {
+		// Check if the existing connection is still alive
+		if err := f.mc.Ping(ctx); err == nil {
+			return f.mc, nil
+		}
+		// Connection is dead, close it
+		f.mc.Close(ctx)
+		f.mc = nil
+	}
+
+	// Create a new maintenance connection
+	newConn, err := f.newConn(ctx, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire maintenance connection: %w", err)
+	}
+
+	f.mc = newConn
+
+	return f.mc, nil
+}
+
+// pool creates a new pool connected to the specified database.
+func (f *TestPoolFactory) pool(ctx context.Context, db string) (*pgxpool.Pool, error) {
+	// Create pool configuration for the new database
+	poolConfig := f.baseConfig.Copy()
+	poolConfig.ConnConfig.Database = db
+
+	p, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		return nil, fmt.Errorf("dbsqltest: failed to create pool: %w", err)
 	}
 
 	if err := p.Ping(ctx); err != nil {
 		p.Close()
-
-		return nil, "", fmt.Errorf("dbsqltest: failed to ping database: %w", err)
+		return nil, fmt.Errorf("dbsqltest: failed to ping database: %w", err)
 	}
 
-	return p, dbName, nil
+	return p, nil
 }
 
-func takeLock(ctx context.Context, db DBTX, name string) (func() error, error) {
-	h := fnv.New32()
-	h.Write([]byte(name))
-	lockNum := int64(h.Sum32())
-
-	if _, err := db.Exec(ctx, "SELECT pg_advisory_lock($1::BIGINT)", lockNum); err != nil {
-		return nil, fmt.Errorf("dbsqltest: failed to acquire lock: %w", err)
-	}
-
-	return func() error {
-		if _, err := db.Exec(ctx, "SELECT pg_advisory_unlock($1::BIGINT)", lockNum); err != nil {
-			return fmt.Errorf("dbsqltest: failed to release lock: %w", err)
-		}
-
-		return nil
-	}, nil
-}
-
-// mkTemplate creates a new database template.
+// mkTemplate creates a new database template with migrations applied.
+// If the template exists, it will skip migration.
 //
-// It repairs the database template if it was previously in invalid state.
-func mkTemplate(ctx context.Context, db DBTX, user, dbName string) error {
-	var doesExist bool
+// Generally, mkTemplate is expected to be called only once at the factory
+// initialization.
+//
+// mkTemplate is not thread-safe; attempting to run it concurrently will result in
+// connection lock (pgx busy conn).
+func (f *TestPoolFactory) mkTemplate(ctx context.Context, migrator Migrator, user, template string) error {
+	mc, err := f.mkMaintenanceConn(ctx)
+	if err != nil {
+		return fmt.Errorf("dbsqltest: failed to get maintenance connection: %w", err)
+	}
 
-	if err := db.
-		QueryRow(ctx, "SELECT exists(SELECT 1 FROM pg_database WHERE datname = $1)", dbName).
-		Scan(&doesExist); err != nil {
+	// It is safe to check only if the database is marked as a template, since marking
+	// it as a template is the last step in the process.
+	var doesTemplateExists bool
+	if err := mc.QueryRow(ctx, "SELECT exists(SELECT 1 FROM pg_database WHERE datname = $1)",
+		template).Scan(&doesTemplateExists); err != nil {
 		return fmt.Errorf("dbsqltest: failed to check if template exists: %w", err)
 	}
 
-	// Template has already been created, skipping setup.
-	if doesExist {
-		return nil
+	if doesTemplateExists {
+		return nil // Template already exists
 	}
 
-	if _, err := db.Exec(ctx, "DROP DATABASE IF EXISTS $1", dbName); err != nil {
+	// If template doesn't exist, we could fail at marking it as a template, but
+	// we could still succeed at creating it. Let's try to clean it up.
+	if _, err := mc.Exec(ctx, strings.Join([]string{
+		"DROP DATABASE IF EXISTS",
+		pgx.Identifier{template}.Sanitize(),
+	}, " ")); err != nil {
 		return fmt.Errorf("dbsqltest: failed to drop existing database template: %w", err)
 	}
 
-	if _, err := db.Exec(ctx, "CREATE DATABASE $1 OWNER $2", dbName, user); err != nil {
+	if _, err := mc.Exec(ctx, strings.Join([]string{
+		"CREATE DATABASE",
+		pgx.Identifier{template}.Sanitize(),
+		"OWNER",
+		pgx.Identifier{user}.Sanitize(),
+	}, " ")); err != nil {
 		return fmt.Errorf("dbsqltest: failed to create database template: %w", err)
 	}
 
-	if _, err := db.Exec(
-		ctx,
-		"UPDATE pg_database SET datistemplate = true WHERE datname = $1", dbName,
-	); err != nil {
+	// Connect to the template database to run migrations in the newly created database.
+	tc, err := f.newConn(ctx, template)
+	if err != nil {
+		return fmt.Errorf("dbsqltest: failed to connect to template database: %w", err)
+	}
+	defer tc.Close(ctx)
+
+	if err := migrator.Up(ctx, tc); err != nil {
+		return fmt.Errorf("dbsqltest: failed to run migrations: %w", err)
+	}
+
+	if _, err := mc.Exec(ctx, "UPDATE pg_database SET datistemplate = true WHERE datname = $1", template); err != nil {
 		return fmt.Errorf("dbsqltest: failed to finalize database template: %w", err)
 	}
 
 	return nil
 }
 
-func copyTemplate(ctx context.Context, dbtx DBTX, dst, src string) error {
-	if _, err := dbtx.Exec(ctx, "CREATE DATABASE $1 TEMPLATE $2", dst, src); err != nil {
+// createEphemeralDB creates a new ephemeral database for testing.
+func (f *TestPoolFactory) createEphemeralDB(ctx context.Context, db string) error {
+	mc, err := f.mkMaintenanceConn(ctx)
+	if err != nil {
+		return fmt.Errorf("dbsqltest: failed to get maintenance connection: %w", err)
+	}
+
+	f.mu.Lock()
+	_, err = mc.Exec(ctx, strings.Join([]string{
+		"CREATE DATABASE",
+		pgx.Identifier{db}.Sanitize(),
+		"TEMPLATE",
+		pgx.Identifier{f.template}.Sanitize(),
+		"OWNER",
+		pgx.Identifier{f.baseConfig.ConnConfig.User}.Sanitize(),
+	}, " "))
+	f.mu.Unlock()
+
+	if err != nil {
 		return fmt.Errorf("dbsqltest: failed to copy database template: %w", err)
 	}
 
 	return nil
+}
+
+// dropEphemeralDB drops the specified ephemeral database after testing.
+func (f *TestPoolFactory) dropEphemeralDB(db string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), f.cleanupTimeout)
+	defer cancel()
+
+	mc, err := f.mkMaintenanceConn(ctx)
+	if err != nil {
+		return fmt.Errorf("dbsqltest: failed to connect to maintenance database: %w", err)
+	}
+
+	f.mu.Lock()
+
+	_, err = mc.Exec(ctx, strings.Join([]string{"DROP DATABASE", pgx.Identifier{db}.Sanitize()}, " "))
+
+	f.mu.Unlock()
+
+	if err != nil {
+		log.Printf("dbsqltest: failed to drop database %s: %v", db, err)
+	}
+
+	return nil
+}
+
+// acquirePgLock acquires a PostgreSQL advisory lock.
+// Make sure to release the lock when the operation is completed.
+func acquirePgLock(ctx context.Context, conn *pgx.Conn, name string) (func() error, error) {
+	h := fnv.New32()
+	h.Write([]byte(name))
+	lockNum := int64(h.Sum32())
+
+	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1::BIGINT)", lockNum); err != nil {
+		return nil, fmt.Errorf("dbsqltest: failed to acquire lock: %w", err)
+	}
+
+	return func() error {
+		if _, err := conn.Exec(ctx, "SELECT pg_advisory_unlock($1::BIGINT)", lockNum); err != nil {
+			return fmt.Errorf("dbsqltest: failed to release lock: %w", err)
+		}
+
+		return nil
+	}, nil
 }

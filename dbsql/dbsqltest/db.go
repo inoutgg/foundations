@@ -15,10 +15,10 @@ type DBTX interface {
 	Begin(context.Context) (pgx.Tx, error)
 }
 
-// Up applies the migration to the database.
-type Up interface {
+// Migrator applies the migration to the database.
+type Migrator interface {
 	// Up applies the migration to the database.
-	Up(context.Context, DBTX) error
+	Up(context.Context, *pgx.Conn) error
 
 	// Hash returns a unique identifier for the migrations to be applied.
 	//
