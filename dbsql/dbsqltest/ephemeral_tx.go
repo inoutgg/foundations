@@ -12,35 +12,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestTxFactory is responsible for creating transactions for testing purposes.
+// TestEphemeralTx creates transactions for testing purposes.
 //
-// The transaction testing pattern is powerful mechanism for testing database
+// Transaction testing pattern is a powerful mechanism for testing database
 // data. It spins up a transaction for each test case allowing to test database
 // data in isolation concurrently. Once the test completes, the transaction is
 // rolled back and the database state is reset to its initial state.
-type TestTxFactory struct {
+type TestEphemeralTx struct {
 	db DBTX
 }
 
-// NewTestTxFactory creates a new TestTxFactory instance.
+// NewTestEphemeralTx creates a new TestEphemeralTx instance.
 //
 // The provided database connection pool must be open and ready to use.
-func NewTestTxFactory(db DBTX) TestTxFactory {
-	return TestTxFactory{db: db}
+func NewTestEphemeralTx(db DBTX) TestEphemeralTx {
+	return TestEphemeralTx{db: db}
 }
 
-// NewTestTxFactoryFromConnString creates a new connection pool from the provided connection string and
-// returns a new TestTxFactory instance.
+// NewTestEphemeralTxFromConnString creates a new connection pool from the provided connection string and
+// returns a new TestEphemeralTx instance.
 //
-// A TestTxFactory instance is returned along with a cleanup function that
+// A TestEphemeralTx instance is returned along with a cleanup function that
 // should be called after the test suite completes.
-func NewTestTxFactoryFromConnString(ctx context.Context, connString string) (TestTxFactory, func(), error) {
+func NewTestEphemeralTxFromConnString(ctx context.Context, connString string) (TestEphemeralTx, func(), error) {
 	pool, err := pgxpool.New(ctx, connString)
 	if err != nil {
-		return TestTxFactory{}, nil, fmt.Errorf("dbsqltest: failed to create connection pool: %w", err)
+		return TestEphemeralTx{}, nil, fmt.Errorf("dbsqltest: failed to create connection pool: %w", err)
 	}
 
-	return NewTestTxFactory(pool), pool.Close, nil
+	return NewTestEphemeralTx(pool), pool.Close, nil
 }
 
 // Tx spawns a database transaction for a given test. Once the test completes,
@@ -48,7 +48,7 @@ func NewTestTxFactoryFromConnString(ctx context.Context, connString string) (Tes
 // state is reset to its initial state.
 //
 // If it fails to start a new transaction it will panic.
-func (f TestTxFactory) Tx(tb testing.TB) pgx.Tx {
+func (f TestEphemeralTx) Tx(tb testing.TB) pgx.Tx {
 	tb.Helper()
 
 	tx, err := f.db.Begin(tb.Context())

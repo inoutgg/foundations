@@ -21,59 +21,100 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-type TestPoolFactoryConfig struct {
+const TestTemplatePrefix = "ephemeral_db_template_"
+
+var (
+	DefaultCleanupTimeout = time.Second * 5              //nolint:gochecknoglobals
+	DefaultMaxPools       = int64(runtime.GOMAXPROCS(0)) //nolint:gochecknoglobals
+)
+
+type testEphemeralDBOptions struct {
 	maxPoolSize    int64
 	cleanupTimeout time.Duration
 }
 
-func (p *TestPoolFactoryConfig) defaults() {
-	p.maxPoolSize = int64(runtime.GOMAXPROCS(0))
-	p.cleanupTimeout = time.Second * 5
+func (p *testEphemeralDBOptions) defaults() {
+	p.maxPoolSize = DefaultMaxPools
+	p.cleanupTimeout = DefaultCleanupTimeout
 }
 
-type TestPoolFactoryOptions func(*TestPoolFactoryConfig)
+// Migrator applies the migration to the database.
+//
+// Migrator is used to apply migrations for the template database,
+// on TestEphemeralDB initialization, which is used for making copies of isolated
+// ephemeral databases.
+type Migrator interface {
+	// Migrate applies migrations to the database.
+	//
+	// Migrate is typically run once during the TestEphemeralDB instantiation
+	// for template database initialization.
+	Migrate(context.Context, *pgx.Conn) error
 
-func WithCleanupTimeout(timeout time.Duration) func(*TestPoolFactoryConfig) {
-	return func(config *TestPoolFactoryConfig) { config.cleanupTimeout = timeout }
+	// Hash returns a unique identifier for a given migration set.
+	//
+	// Each unique identifier is used to uniquely identify database template in
+	// the target database.
+	Hash() string
 }
 
-func WithMaxPools(n int64) func(*TestPoolFactoryConfig) {
-	return func(config *TestPoolFactoryConfig) { config.maxPoolSize = n }
+// TestEphemeralDBOption is an option for configuring a TestEphemeralDB.
+type TestEphemeralDBOption func(*testEphemeralDBOptions)
+
+// WithCleanupTimeout sets the timeout for cleaning up a database after
+// a test is complete.
+func WithCleanupTimeout(timeout time.Duration) func(*testEphemeralDBOptions) {
+	return func(config *testEphemeralDBOptions) { config.cleanupTimeout = timeout }
 }
 
-type TestPoolFactory struct {
-	mc             *pgx.Conn
-	baseConfig     *pgxpool.Config
+// WithMaxPools sets the maximum number of pools that can be created per
+// the test process.
+//
+// Note that this limit is applied per test process and is not shared across
+// multiple test processes. Meaning that if N packages are tested simultaneously,
+// the maximum number of pools that can be created is N * maxPoolSize.
+func WithMaxPools(n int64) func(*testEphemeralDBOptions) {
+	return func(config *testEphemeralDBOptions) { config.maxPoolSize = n }
+}
+
+// TestEphemeralDB manages lifecycle of a set of ephemeral databases
+// used for testing purposes.
+//
+// It helps to create a completely new database for each test allowing
+// to run them in parallel without interfering with each other, helping to
+// avoid data leakage between tests.
+type TestEphemeralDB struct {
+	mc             *pgx.Conn // protected by mu
+	config         *pgxpool.Config
 	sema           *semaphore.Weighted
 	template       string
 	cleanupTimeout time.Duration
 	mu             sync.Mutex
 }
 
-// NewTestPoolFactory creates a new factory for managing test database pools.
-func NewTestPoolFactory(
+// NewTestEphemeralDB creates a new TestEphemeralDB instance.
+//
+// It initializes a new database, applies migration to it and makes
+// it available for use as a Postgres template. The template is copied for
+// each new ephemeral database.
+func NewTestEphemeralDB(
 	ctx context.Context,
-	connString string,
+	config *pgxpool.Config,
 	migrator Migrator,
-	opts ...TestPoolFactoryOptions,
-) (*TestPoolFactory, error) {
-	config := TestPoolFactoryConfig{}
+	opts ...TestEphemeralDBOption,
+) (*TestEphemeralDB, error) {
+	//nolint:exhaustruct // defaults will initialize the missing fields.
+	options := testEphemeralDBOptions{}
 	for _, opt := range opts {
-		opt(&config)
+		opt(&options)
 	}
 
-	config.defaults()
+	options.defaults()
 
-	baseConfig, err := pgxpool.ParseConfig(connString)
-	if err != nil {
-		return nil, fmt.Errorf("dbsqltest: failed to parse connection string: %w", err)
-	}
-
-	//nolint:exhaustruct
-	f := TestPoolFactory{
-		sema:           semaphore.NewWeighted(config.maxPoolSize),
-		cleanupTimeout: config.cleanupTimeout,
-		baseConfig:     baseConfig,
+	//nolint:exhaustruct // init will initialize the missing fields.
+	f := TestEphemeralDB{
+		sema:           semaphore.NewWeighted(options.maxPoolSize),
+		cleanupTimeout: options.cleanupTimeout,
+		config:         config.Copy(),
 	}
 
 	if err := f.init(ctx, migrator); err != nil {
@@ -83,10 +124,32 @@ func NewTestPoolFactory(
 	return &f, nil
 }
 
-// Pool creates a new ephemeral database from the template and returns a pool connected to it.
-// It waits on a semaphore for a database slot to be available, then creates a new database
-// from the template and returns a pool connected to it.
-func (f *TestPoolFactory) Pool(tb testing.TB) *pgxpool.Pool {
+// NewTestEphemeralDBFromConnString is like NewTestEphemeralDB
+// but the base pool config is provided via connection string.
+func NewTestEphemeralDBFromConnString(
+	ctx context.Context,
+	connString string,
+	migrator Migrator,
+	opts ...TestEphemeralDBOption,
+) (*TestEphemeralDB, error) {
+	config, err := pgxpool.ParseConfig(connString)
+	if err != nil {
+		return nil, err
+	}
+	return NewTestEphemeralDB(ctx, config, migrator, opts...)
+}
+
+// EphemeralDB creates a new completely isolated database ready for use.
+//
+// If the test fails the database is left intact for debugging,
+// otherwise it is dropped.
+//
+// It is expected that each test case uses a separate database, which
+// helps to isolate tests and prevent data leakage between them.
+//
+// If number of active tests exceeds maxPoolSize, it will block until a
+// slot becomes available.
+func (f *TestEphemeralDB) EphemeralDB(tb testing.TB) *pgxpool.Pool {
 	tb.Helper()
 
 	var (
@@ -100,10 +163,10 @@ func (f *TestPoolFactory) Pool(tb testing.TB) *pgxpool.Pool {
 	err = f.createEphemeralDB(ctx, db)
 	require.NoError(tb, err, "failed to create ephemeral database")
 
-	pool, err := f.pool(ctx, db)
+	pool, err := f.useEmphemeralDB(ctx, db)
 	require.NoError(tb, err)
 
-	tb.Logf("running test in database: %s", db)
+	tb.Logf("running test in ephemeral database = %s", db)
 
 	tb.Cleanup(func() {
 		defer f.sema.Release(1)
@@ -121,12 +184,11 @@ func (f *TestPoolFactory) Pool(tb testing.TB) *pgxpool.Pool {
 	return pool
 }
 
-// init initializes the factory by creating a template database with a generated
-// template name and user.
-func (f *TestPoolFactory) init(ctx context.Context, migrator Migrator) (err error) {
+// init creates a new template database owned by the supplied user.
+func (f *TestEphemeralDB) init(ctx context.Context, migrator Migrator) (err error) {
 	var (
-		user     = f.baseConfig.ConnConfig.User
-		password = f.baseConfig.ConnConfig.Password
+		user     = f.config.ConnConfig.User
+		password = f.config.ConnConfig.Password
 	)
 
 	h := fnv.New64()
@@ -134,7 +196,7 @@ func (f *TestPoolFactory) init(ctx context.Context, migrator Migrator) (err erro
 	h.Write([]byte(password))
 	h.Write([]byte(migrator.Hash()))
 
-	template := "test_template_" + strconv.FormatUint(h.Sum64(), 10)
+	template := TestTemplatePrefix + strconv.FormatUint(h.Sum64(), 10)
 	f.template = template
 
 	mc, err := f.mkMaintenanceConn(ctx)
@@ -161,8 +223,8 @@ func (f *TestPoolFactory) init(ctx context.Context, migrator Migrator) (err erro
 
 // newConn creates a new connection to the specified database.
 // If db is empty, connects to the default maintenance database.
-func (f *TestPoolFactory) newConn(ctx context.Context, db string) (*pgx.Conn, error) {
-	connConfig := f.baseConfig.ConnConfig.Copy()
+func (f *TestEphemeralDB) newConn(ctx context.Context, db string) (*pgx.Conn, error) {
+	connConfig := f.config.ConnConfig.Copy()
 	connConfig.Database = cmp.Or(db, connConfig.Database)
 
 	conn, err := pgx.ConnectConfig(ctx, connConfig)
@@ -178,9 +240,10 @@ func (f *TestPoolFactory) newConn(ctx context.Context, db string) (*pgx.Conn, er
 	return conn, nil
 }
 
-// mkMaintenanceConn returns a maintenance connection, creating/refreshing it if needed.
-// This method is thread-safe.
-func (f *TestPoolFactory) mkMaintenanceConn(ctx context.Context) (*pgx.Conn, error) {
+// mkMaintenanceConn returns a maintenance connection.
+//
+// Maintenance connection is used to manage ephemeral databases lifecycle.
+func (f *TestEphemeralDB) mkMaintenanceConn(ctx context.Context) (*pgx.Conn, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -205,13 +268,12 @@ func (f *TestPoolFactory) mkMaintenanceConn(ctx context.Context) (*pgx.Conn, err
 	return f.mc, nil
 }
 
-// pool creates a new pool connected to the specified database.
-func (f *TestPoolFactory) pool(ctx context.Context, db string) (*pgxpool.Pool, error) {
-	// Create pool configuration for the new database
-	poolConfig := f.baseConfig.Copy()
-	poolConfig.ConnConfig.Database = db
+// useEmphemeralDB creates a new pool connected to the db ephemeral database.
+func (f *TestEphemeralDB) useEmphemeralDB(ctx context.Context, db string) (*pgxpool.Pool, error) {
+	config := f.config.Copy()
+	config.ConnConfig.Database = db
 
-	p, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	p, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("dbsqltest: failed to create pool: %w", err)
 	}
@@ -232,7 +294,7 @@ func (f *TestPoolFactory) pool(ctx context.Context, db string) (*pgxpool.Pool, e
 //
 // mkTemplate is not thread-safe; attempting to run it concurrently will result in
 // connection lock (pgx busy conn).
-func (f *TestPoolFactory) mkTemplate(ctx context.Context, migrator Migrator, user, template string) error {
+func (f *TestEphemeralDB) mkTemplate(ctx context.Context, migrator Migrator, user, template string) error {
 	mc, err := f.mkMaintenanceConn(ctx)
 	if err != nil {
 		return fmt.Errorf("dbsqltest: failed to get maintenance connection: %w", err)
@@ -275,7 +337,7 @@ func (f *TestPoolFactory) mkTemplate(ctx context.Context, migrator Migrator, use
 	}
 	defer tc.Close(ctx)
 
-	if err := migrator.Up(ctx, tc); err != nil {
+	if err := migrator.Migrate(ctx, tc); err != nil {
 		return fmt.Errorf("dbsqltest: failed to run migrations: %w", err)
 	}
 
@@ -286,8 +348,8 @@ func (f *TestPoolFactory) mkTemplate(ctx context.Context, migrator Migrator, use
 	return nil
 }
 
-// createEphemeralDB creates a new ephemeral database for testing.
-func (f *TestPoolFactory) createEphemeralDB(ctx context.Context, db string) error {
+// createEphemeralDB creates a new db ephemeral database for testing.
+func (f *TestEphemeralDB) createEphemeralDB(ctx context.Context, db string) error {
 	mc, err := f.mkMaintenanceConn(ctx)
 	if err != nil {
 		return fmt.Errorf("dbsqltest: failed to get maintenance connection: %w", err)
@@ -300,7 +362,7 @@ func (f *TestPoolFactory) createEphemeralDB(ctx context.Context, db string) erro
 		"TEMPLATE",
 		pgx.Identifier{f.template}.Sanitize(),
 		"OWNER",
-		pgx.Identifier{f.baseConfig.ConnConfig.User}.Sanitize(),
+		pgx.Identifier{f.config.ConnConfig.User}.Sanitize(),
 	}, " "))
 	f.mu.Unlock()
 
@@ -311,14 +373,14 @@ func (f *TestPoolFactory) createEphemeralDB(ctx context.Context, db string) erro
 	return nil
 }
 
-// dropEphemeralDB drops the specified ephemeral database after testing.
-func (f *TestPoolFactory) dropEphemeralDB(db string) error {
+// dropEphemeralDB drops the db ephemeral database after testing.
+func (f *TestEphemeralDB) dropEphemeralDB(db string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), f.cleanupTimeout)
 	defer cancel()
 
 	mc, err := f.mkMaintenanceConn(ctx)
 	if err != nil {
-		return fmt.Errorf("dbsqltest: failed to connect to maintenance database: %w", err)
+		return fmt.Errorf("dbsqltest: failed create maintenance connection: %w", err)
 	}
 
 	f.mu.Lock()
@@ -334,8 +396,6 @@ func (f *TestPoolFactory) dropEphemeralDB(db string) error {
 	return nil
 }
 
-// acquirePgLock acquires a PostgreSQL advisory lock.
-// Make sure to release the lock when the operation is completed.
 func acquirePgLock(ctx context.Context, conn *pgx.Conn, name string) (func() error, error) {
 	h := fnv.New32()
 	h.Write([]byte(name))
