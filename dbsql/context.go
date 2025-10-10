@@ -11,7 +11,7 @@ type ctxKey struct{}
 
 var kCtxKey = ctxKey{} //nolint:gochecknoglobals
 
-var ErrDBPoolNotFound = errors.New("foundations/sqldb: failed to retrieve db pool from context")
+var ErrPoolMissing = errors.New("dbsql: failed to retrieve db pool from context")
 
 // WithPool returns a new context with the given pool.
 func WithPool(ctx context.Context, pool *pgxpool.Pool) context.Context {
@@ -24,5 +24,5 @@ func FromContext(ctx context.Context) (*pgxpool.Pool, error) {
 		return pool, nil
 	}
 
-	return nil, ErrDBPoolNotFound
+	return nil, ErrPoolMissing
 }

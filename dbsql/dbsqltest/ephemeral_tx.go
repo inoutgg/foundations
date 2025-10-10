@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -48,7 +47,7 @@ func NewTestEphemeralTxFromConnString(ctx context.Context, connString string) (T
 // state is reset to its initial state.
 //
 // If it fails to start a new transaction it will panic.
-func (f TestEphemeralTx) Tx(tb testing.TB) pgx.Tx {
+func (f TestEphemeralTx) Tx(tb TB) pgx.Tx {
 	tb.Helper()
 
 	tx, err := f.db.Begin(tb.Context())

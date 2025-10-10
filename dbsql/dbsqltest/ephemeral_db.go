@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,24 +16,19 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
+	"go.inout.gg/foundations/debug"
 	"go.jetify.com/typeid/v2"
-	"golang.org/x/sync/semaphore"
 )
 
 const TestTemplatePrefix = "ephemeral_db_template_"
 
-var (
-	DefaultCleanupTimeout = time.Second * 5              //nolint:gochecknoglobals
-	DefaultMaxPools       = int64(runtime.GOMAXPROCS(0)) //nolint:gochecknoglobals
-)
+var DefaultCleanupTimeout = time.Second * 5 //nolint:gochecknoglobals
 
 type testEphemeralDBOptions struct {
-	maxPoolSize    int64
 	cleanupTimeout time.Duration
 }
 
 func (p *testEphemeralDBOptions) defaults() {
-	p.maxPoolSize = DefaultMaxPools
 	p.cleanupTimeout = DefaultCleanupTimeout
 }
 
@@ -66,16 +60,6 @@ func WithCleanupTimeout(timeout time.Duration) func(*testEphemeralDBOptions) {
 	return func(config *testEphemeralDBOptions) { config.cleanupTimeout = timeout }
 }
 
-// WithMaxPools sets the maximum number of pools that can be created per
-// the test process.
-//
-// Note that this limit is applied per test process and is not shared across
-// multiple test processes. Meaning that if N packages are tested simultaneously,
-// the maximum number of pools that can be created is N * maxPoolSize.
-func WithMaxPools(n int64) func(*testEphemeralDBOptions) {
-	return func(config *testEphemeralDBOptions) { config.maxPoolSize = n }
-}
-
 // TestEphemeralDB manages lifecycle of a set of ephemeral databases
 // used for testing purposes.
 //
@@ -85,7 +69,6 @@ func WithMaxPools(n int64) func(*testEphemeralDBOptions) {
 type TestEphemeralDB struct {
 	mc             *pgx.Conn // protected by mu
 	config         *pgxpool.Config
-	sema           *semaphore.Weighted
 	template       string
 	cleanupTimeout time.Duration
 	mu             sync.Mutex
@@ -112,7 +95,6 @@ func NewTestEphemeralDB(
 
 	//nolint:exhaustruct // init will initialize the missing fields.
 	f := TestEphemeralDB{
-		sema:           semaphore.NewWeighted(options.maxPoolSize),
 		cleanupTimeout: options.cleanupTimeout,
 		config:         config.Copy(),
 	}
@@ -120,6 +102,10 @@ func NewTestEphemeralDB(
 	if err := f.init(ctx, migrator); err != nil {
 		return nil, fmt.Errorf("dbsqltest: failed to initialize factory: %w", err)
 	}
+
+	debug.Assert(f.cleanupTimeout != 0, "cleanupTimeout must be set")
+	debug.Assert(f.template != "", "template must be set")
+	debug.Assert(f.config != nil, "config must be set")
 
 	return &f, nil
 }
@@ -134,8 +120,9 @@ func NewTestEphemeralDBFromConnString(
 ) (*TestEphemeralDB, error) {
 	config, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dbsqltest: failed to parse connection string: %w", err)
 	}
+
 	return NewTestEphemeralDB(ctx, config, migrator, opts...)
 }
 
@@ -157,10 +144,7 @@ func (f *TestEphemeralDB) EphemeralDB(tb testing.TB) *pgxpool.Pool {
 		db  = typeid.MustGenerate(namesgenerator.GetRandomName(0)).String()
 	)
 
-	err := f.sema.Acquire(ctx, 1)
-	require.NoError(tb, err, "failed to acquire semaphore")
-
-	err = f.createEphemeralDB(ctx, db)
+	err := f.createEphemeralDB(ctx, db)
 	require.NoError(tb, err, "failed to create ephemeral database")
 
 	pool, err := f.useEmphemeralDB(ctx, db)
@@ -169,8 +153,6 @@ func (f *TestEphemeralDB) EphemeralDB(tb testing.TB) *pgxpool.Pool {
 	tb.Logf("running test in ephemeral database = %s", db)
 
 	tb.Cleanup(func() {
-		defer f.sema.Release(1)
-
 		pool.Close()
 
 		// Leave the database intact if the test has failed for debugging
@@ -252,6 +234,7 @@ func (f *TestEphemeralDB) mkMaintenanceConn(ctx context.Context) (*pgx.Conn, err
 		if err := f.mc.Ping(ctx); err == nil {
 			return f.mc, nil
 		}
+
 		// Connection is dead, close it
 		f.mc.Close(ctx)
 		f.mc = nil

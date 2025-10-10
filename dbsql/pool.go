@@ -22,25 +22,25 @@ func WithSearchPath(schema string) func(c *pgxpool.Config) {
 }
 
 // MustPool creates a new connection pool and panics on error.
-func MustPool(ctx context.Context, connString string, cfgs ...func(*pgxpool.Config)) *pgxpool.Pool {
-	return must.Must(NewPool(ctx, connString, cfgs...))
+func MustPool(ctx context.Context, connString string, opts ...func(*pgxpool.Config)) *pgxpool.Pool {
+	return must.Must(NewPool(ctx, connString, opts...))
 }
 
 // NewPool creates a new connection pool using the provided connection string.
 func NewPool(
 	ctx context.Context,
 	connStr string,
-	cfgs ...func(*pgxpool.Config),
+	opts ...func(*pgxpool.Config),
 ) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"foundations/sqldb: failed to parse database connection string: %w",
+			"dbsql: failed to parse database connection string: %w",
 			err,
 		)
 	}
 
-	for _, f := range cfgs {
+	for _, f := range opts {
 		f(cfg)
 	}
 
@@ -51,7 +51,7 @@ func NewPool(
 func NewPoolWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("foundations/sqldb: failed to create a new database pool: %w", err)
+		return nil, fmt.Errorf("dbsql: failed to create a new database pool: %w", err)
 	}
 
 	defer func() {
@@ -62,7 +62,7 @@ func NewPoolWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool,
 
 	if err = pool.Ping(ctx); err != nil {
 		return nil, fmt.Errorf(
-			"foundations/sqldb: failed to connect to the database at %s: %w",
+			"dbsql: failed to connect to the database at %s: %w",
 			cfg.ConnString(),
 			err,
 		)
