@@ -14,10 +14,10 @@ var _ Engine = (*engine)(nil)
 // Engine is an adapter for a templating engine that is used by a Renderer.
 type Engine interface {
 	// ParseFS loads templates from the given fs.
-	ParseFS(f fs.FS) error
+	ParseFS(fs.FS) error
 
 	// Execute evaluates template with given name and the data context.
-	Execute(w io.Writer, name string, data any) error
+	Execute(io.Writer, string, any) error
 }
 
 type engine struct {

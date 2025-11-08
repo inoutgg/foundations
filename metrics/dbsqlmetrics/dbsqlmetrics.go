@@ -19,9 +19,8 @@ const (
 )
 
 type stats struct {
-	meter        metric.Meter
-	acquireCount metric.Int64ObservableCounter
-	// acquireDuration         metric.Int64Histogram
+	meter                   metric.Meter
+	acquireCount            metric.Int64ObservableCounter
 	acquiredConns           metric.Int64ObservableCounter
 	canceledAcquireCount    metric.Int64ObservableCounter
 	constructingConns       metric.Int64ObservableCounter
@@ -40,7 +39,6 @@ func newStats(meter metric.Meter) *stats {
 		acquireCount: must.Must(meter.Int64ObservableCounter(
 			metrics.FormatMetricName("acquire_count"),
 			metric.WithDescription("Number of acquire operations"))),
-		// acquireDuration:         must.Must(meter.Int64Histogram(metrics.FormatMetricName("acquire_duration"), metric.WithDescription("Duration of acquire operations"))),
 		acquiredConns: must.Must(meter.Int64ObservableCounter(
 			metrics.FormatMetricName("acquired_conns"),
 			metric.WithDescription("Number of acquired connections"))),
@@ -79,7 +77,6 @@ func (s *stats) register(pool *pgxpool.Pool) error {
 		func(_ context.Context, observer metric.Observer) error {
 			stats := pool.Stat()
 
-			// observer.ObserveInt64(s.acquireDuration, stats.AcquireDuration())
 			observer.ObserveInt64(s.acquiredConns, int64(stats.AcquiredConns()))
 			observer.ObserveInt64(s.canceledAcquireCount, stats.CanceledAcquireCount())
 			observer.ObserveInt64(s.constructingConns, int64(stats.ConstructingConns()))

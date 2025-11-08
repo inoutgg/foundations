@@ -18,8 +18,6 @@ var TODO = http.HandlerFunc(
 )
 
 // HealthCheck returns an HTTP response with "ok" body and 200 status.
-//
-
 func HealthCheck(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(okStr)

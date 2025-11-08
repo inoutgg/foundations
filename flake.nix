@@ -3,7 +3,7 @@
 
   inputs = {
     devenv.url = "github:cachix/devenv";
-    nixpkgs.url = "github:cachix/devenv-nixpkgs/rolling";
+    nixpkgs.url = "nixpkgs/nixos-unstable";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-root.url = "github:srid/flake-root";
@@ -75,12 +75,14 @@
             env.GOTOOLCHAIN = lib.mkForce "local";
             env.GOFUMPT_SPLIT_LONG_LINES = lib.mkForce "on";
 
+            env.TEST_DATABASE_URL = lib.mkForce "postgres://test:test@localhost:5432/test";
             services.postgres = {
               enable = true;
               package = pkgs.postgresql_17;
 
               initialScript = ''
                 CREATE USER test SUPERUSER PASSWORD 'test';
+                CREATE DATABASE test OWNER test;
               '';
               listen_addresses = "localhost";
               port = 5432;

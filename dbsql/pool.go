@@ -7,7 +7,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	// "go.inout.gg/foundations/dbsql/internal/pgxtypeid".
 	"go.inout.gg/foundations/must"
 )
 
@@ -49,6 +48,7 @@ func NewPool(
 
 // NewPoolWithConfig creates a new connection pool using the provided configuration.
 func NewPoolWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
+	var err error
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("dbsql: failed to create a new database pool: %w", err)
