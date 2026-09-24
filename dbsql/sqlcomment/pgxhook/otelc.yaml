@@ -1,0 +1,29 @@
+comment_pgx_exec:
+  target: github.com/jackc/pgx/v5
+  where:
+    func: Exec
+    recv: "*Conn"
+  do:
+    - inject_hooks:
+        before: BeforeExec
+        path: go.inout.gg/foundations/dbsql/sqlcomment/pgxhook
+
+comment_pgx_query:
+  target: github.com/jackc/pgx/v5
+  where:
+    func: Query
+    recv: "*Conn"
+  do:
+    - inject_hooks:
+        before: BeforeQuery
+        path: go.inout.gg/foundations/dbsql/sqlcomment/pgxhook
+
+comment_pgx_batch:
+  target: github.com/jackc/pgx/v5
+  where:
+    func: SendBatch
+    recv: "*Conn"
+  do:
+    - inject_hooks:
+        before: BeforeSendBatch
+        path: go.inout.gg/foundations/dbsql/sqlcomment/pgxhook

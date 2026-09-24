@@ -31,37 +31,38 @@ func (db *db) FactoryGetByID(_ context.Context, id int) (*Factory, error) {
 }
 
 type Factory struct {
-	ID       int
 	Location string
+	ID       int
 }
 
 type DBProduct struct {
+	Name      string
 	ID        int
 	FactoryID int
-	Name      string
 }
 
 type Product struct {
-	ID              int    `json:"id"`
-	FactoryID       int    `json:"factory_id"`
-	FactoryLocation string `json:"factory_location"`
+	FactoryLocation string `json:"factory_location"` //nolint:tagliatelle // API responses use snake_case.
 	Name            string `json:"name"`
+	ID              int    `json:"id"`
+	FactoryID       int    `json:"factory_id"` //nolint:tagliatelle // API responses use snake_case.
 }
 
-func (_ *Product) Bundle(ctx context.Context, params *params, products []*DBProduct) (*ProductBundle, error) {
+func (*Product) Bundle(ctx context.Context, params *params, products []*DBProduct) (*ProductBundle, error) {
 	bundle := &ProductBundle{factories: make(map[int]*Factory, len(products))}
 	for _, product := range products {
 		factory, err := params.db.FactoryGetByID(ctx, product.FactoryID)
 		if err != nil {
 			return nil, err
 		}
+
 		bundle.factories[product.FactoryID] = factory
 	}
 
 	return bundle, nil
 }
 
-func (_ *Product) Render(
+func (*Product) Render(
 	_ context.Context,
 	params *params,
 	bundle *ProductBundle,
@@ -103,6 +104,7 @@ func Test_Render(t *testing.T) {
 
 		// Assert.
 		require.NoError(t, err)
+
 		want := &Product{
 			ID:              1,
 			FactoryID:       10,
@@ -164,6 +166,7 @@ func Test_RenderMany(t *testing.T) {
 
 		// Assert.
 		require.NoError(t, err)
+
 		want := []*Product{
 			{ID: 1, FactoryID: 10, FactoryLocation: "Detroit", Name: "Pressure Gauge"},
 			{ID: 2, FactoryID: 20, FactoryLocation: "Osaka", Name: "Conveyor Motor"},
@@ -243,7 +246,7 @@ func ExampleRender() {
 	}
 
 	fmt.Printf("%+v\n", resource)
-	// Output: &{ID:1 FactoryID:10 FactoryLocation:Detroit Name:Pressure Gauge}
+	// Output: &{FactoryLocation:Detroit Name:Pressure Gauge ID:1 FactoryID:10}
 }
 
 func ExampleRenderMany() {
@@ -264,11 +267,12 @@ func ExampleRenderMany() {
 	if err != nil {
 		panic(err)
 	}
+
 	for _, resource := range resources {
 		fmt.Printf("%+v\n", resource)
 	}
 
 	// Output:
-	// &{ID:1 FactoryID:10 FactoryLocation:Detroit Name:Pressure Gauge}
-	// &{ID:2 FactoryID:20 FactoryLocation:Osaka Name:Conveyor Motor}
+	// &{FactoryLocation:Detroit Name:Pressure Gauge ID:1 FactoryID:10}
+	// &{FactoryLocation:Osaka Name:Conveyor Motor ID:2 FactoryID:20}
 }

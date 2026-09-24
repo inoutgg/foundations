@@ -2,33 +2,27 @@ package sqlcomment
 
 import "context"
 
-// Tagger is used by the DB wrapper to add tags to SQL queries.
+// Tagger supplies tags for SQL comments.
 type Tagger interface {
 	Tag(context.Context) Tags
 }
 
-type (
-	// Option configures SQL commenting.
-	Option func(*commenter)
-)
+// Option configures the manual SQL-comment wrapper.
+type Option func(*commenter)
 
-// WithTagger sets the taggers used to populate the SQL comment.
+// WithTagger adds taggers used to populate the SQL comment.
 func WithTagger(taggers ...Tagger) Option {
 	return func(c *commenter) {
 		c.taggers = append(c.taggers, taggers...)
 	}
 }
 
-// WithTags appends the given tags to every SQL query.
+// WithTags adds the given tags to every SQL query through the manual wrapper.
 func WithTags(tags Tags) Option {
-	return func(c *commenter) {
-		c.taggers = append(c.taggers, NewStaticTagger(tags))
-	}
+	return WithTagger(NewStaticTagger(tags))
 }
 
 // WithDriverVerTag adds a db_driver tag with the current pgx version.
 func WithDriverVerTag() Option {
-	return func(c *commenter) {
-		c.taggers = append(c.taggers, NewDriverVersionTagger())
-	}
+	return WithTagger(NewDriverVersionTagger())
 }

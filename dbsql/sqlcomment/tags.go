@@ -32,20 +32,22 @@ func encodeKey(k string) string {
 
 // Marshal returns the sqlcommenter encoding of t.
 func (t Tags) Marshal() string {
-	kv := make([]struct{ k, v string }, 0, len(t))
+	pairs := make([]struct{ k, v string }, 0, len(t))
 	for k := range t {
-		kv = append(kv, struct{ k, v string }{encodeKey(k), encodeValue(t[k])})
+		pairs = append(pairs, struct{ k, v string }{encodeKey(k), encodeValue(t[k])})
 	}
 
-	sort.Slice(kv, func(i, j int) bool {
-		return kv[i].k < kv[j].k
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].k < pairs[j].k
 	})
 
 	var b strings.Builder
-	for i, p := range kv {
+
+	for i, p := range pairs {
 		if i > 0 {
 			b.WriteByte(',')
 		}
+
 		fmt.Fprintf(&b, "%s=%s", p.k, p.v)
 	}
 

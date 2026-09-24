@@ -25,42 +25,31 @@ func (r *queryRecorder) TraceQueryStart(
 
 func (r *queryRecorder) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
 
-func (r *queryRecorder) TraceBatchStart(
-	ctx context.Context,
-	_ *pgx.Conn,
-	_ pgx.TraceBatchStartData,
-) context.Context {
+func (r *queryRecorder) TraceBatchStart(ctx context.Context, _ *pgx.Conn, _ pgx.TraceBatchStartData) context.Context {
 	return ctx
 }
 
-func (r *queryRecorder) TraceBatchQuery(
-	_ context.Context,
-	_ *pgx.Conn,
-	data pgx.TraceBatchQueryData,
-) {
+func (r *queryRecorder) TraceBatchQuery(_ context.Context, _ *pgx.Conn, data pgx.TraceBatchQueryData) {
 	r.queries = append(r.queries, data.SQL)
 }
 
 func (r *queryRecorder) TraceBatchEnd(context.Context, *pgx.Conn, pgx.TraceBatchEndData) {}
 
-func (r *queryRecorder) Reset() {
-	r.queries = nil
-}
-
-func (r *queryRecorder) Last(t *testing.T) string {
+func (r *queryRecorder) last(t *testing.T) string {
 	t.Helper()
+	require.NotEmpty(t, r.queries)
 
-	require.NotEmpty(t, r.queries, "no queries recorded")
 	return r.queries[len(r.queries)-1]
 }
 
-func newTracedDB(t *testing.T, options ...Option) (*DB, *queryRecorder) {
+func newManualDB(t *testing.T, options ...Option) (*DB, *queryRecorder) {
 	t.Helper()
 
 	connString := os.Getenv("TEST_DATABASE_URL")
 	if connString == "" {
 		connString = os.Getenv("PGX_TEST_DATABASE")
 	}
+
 	if connString == "" {
 		connString = "postgres://test:test@localhost:5432/test"
 	}
@@ -68,124 +57,61 @@ func newTracedDB(t *testing.T, options ...Option) (*DB, *queryRecorder) {
 	recorder := &queryRecorder{}
 	cfg, err := pgxpool.ParseConfig(connString)
 	require.NoError(t, err)
-	cfg.ConnConfig.Tracer = recorder
 
-	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	cfg.ConnConfig.Tracer = recorder
+	pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
 	require.NoError(t, err)
 	t.Cleanup(pool.Close)
-
-	require.NoError(t, pool.Ping(context.Background()))
-	recorder.Reset()
+	require.NoError(t, pool.Ping(t.Context()))
 
 	return NewWithDefaults(pool, options...), recorder
 }
 
-func TestDBComments(t *testing.T) {
-	t.Parallel()
+func TestManualDBComments(t *testing.T) {
+	wrapped, recorder := newManualDB(t, WithTags(Tags{KeyApplication: "api"}))
+	ctx := WithTag(context.Background(), "request id", "a b")
+	want := "select 1 /*application='api',request+id='a%20b'*/"
 
-	t.Run("adds SQL comment", func(t *testing.T) {
-		t.Parallel()
+	_, err := wrapped.Exec(ctx, "select 1")
+	require.NoError(t, err)
+	require.Equal(t, want, recorder.last(t))
 
-		// Arrange
-		wrapped, recorder := newTracedDB(t, WithTags(Tags{KeyApplication: "api"}))
-		ctx := WithTag(context.Background(), "request id", "a b")
-		want := "select 1 /*application='api',request+id='a%20b'*/"
+	_, err = wrapped.Exec(WithTag(ctx, KeyApplication, "context"), "select 1")
+	require.NoError(t, err)
+	require.Equal(t, "select 1 /*application='context',request+id='a%20b'*/", recorder.last(t))
 
-		// Act
-		_, err := wrapped.Exec(ctx, "select 1")
+	var value int
+	require.NoError(t, wrapped.QueryRow(ctx, "select 1").Scan(&value))
+	require.Equal(t, want, recorder.last(t))
 
-		// Assert
-		require.NoError(t, err)
-		require.Equal(t, want, recorder.Last(t))
-	})
+	batch := &pgx.Batch{}
+	batch.Queue("select 1")
+	require.NoError(t, wrapped.SendBatch(ctx, batch).Close())
+	require.Equal(t, want, recorder.last(t))
+	require.Equal(t, "select 1", batch.QueuedQueries[0].SQL)
 
-	t.Run("context tags override static tags", func(t *testing.T) {
-		t.Parallel()
+	tx, err := wrapped.BeginTx(ctx, pgx.TxOptions{})
+	require.NoError(t, err)
 
-		// Arrange
-		wrapped, recorder := newTracedDB(t, WithTags(Tags{KeyRoute: "static"}))
-		ctx := WithTag(context.Background(), KeyRoute, "context")
-		want := "select 1 /*route='context'*/"
+	defer func() { require.NoError(t, tx.Rollback(ctx)) }()
 
-		// Act
-		_, err := wrapped.Exec(ctx, "select 1")
+	_, err = tx.Exec(ctx, "select 1")
+	require.NoError(t, err)
+	require.Equal(t, want, recorder.last(t))
 
-		// Assert
-		require.NoError(t, err)
-		require.Equal(t, want, recorder.Last(t))
-	})
+	nested, err := tx.Begin(ctx)
+	require.NoError(t, err)
 
-	t.Run("skip leaves SQL unchanged", func(t *testing.T) {
-		t.Parallel()
+	defer func() { require.NoError(t, nested.Rollback(ctx)) }()
 
-		// Arrange
-		wrapped, recorder := newTracedDB(t, WithTags(Tags{KeyApplication: "api"}))
-		ctx := Skip(context.Background())
+	require.NoError(t, nested.QueryRow(ctx, "select 1").Scan(&value))
+	require.Equal(t, want, recorder.last(t))
 
-		// Act
-		_, err := wrapped.Exec(ctx, "select 1")
+	_, err = nested.Exec(Skip(ctx), "select 1")
+	require.NoError(t, err)
+	require.Equal(t, "select 1", recorder.last(t))
 
-		// Assert
-		require.NoError(t, err)
-		require.Equal(t, "select 1", recorder.Last(t))
-	})
-
-	t.Run("comments batches without mutating original", func(t *testing.T) {
-		t.Parallel()
-
-		// Arrange
-		wrapped, recorder := newTracedDB(t, WithTags(Tags{KeyApplication: "api"}))
-		b := &pgx.Batch{}
-		b.Queue("select 1")
-		want := "select 1 /*application='api'*/"
-
-		// Act
-		err := wrapped.SendBatch(context.Background(), b).Close()
-
-		// Assert
-		require.NoError(t, err)
-		require.Equal(t, want, recorder.Last(t))
-		require.Equal(t, "select 1", b.QueuedQueries[0].SQL)
-	})
-
-	t.Run("wraps transactions", func(t *testing.T) {
-		t.Parallel()
-
-		// Arrange
-		wrapped, recorder := newTracedDB(t, WithTags(Tags{KeyApplication: "api"}))
-		tx, err := wrapped.Begin(context.Background())
-		require.NoError(t, err)
-		t.Cleanup(func() { require.NoError(t, tx.Rollback(context.Background())) })
-		recorder.Reset()
-		want := "select 1 /*application='api'*/"
-
-		// Act
-		_, err = tx.Exec(context.Background(), "select 1")
-
-		// Assert
-		require.NoError(t, err)
-		require.Equal(t, want, recorder.Last(t))
-	})
-
-	t.Run("comments transaction batches without mutating original", func(t *testing.T) {
-		t.Parallel()
-
-		// Arrange
-		wrapped, recorder := newTracedDB(t, WithTags(Tags{KeyApplication: "api"}))
-		tx, err := wrapped.Begin(context.Background())
-		require.NoError(t, err)
-		t.Cleanup(func() { require.NoError(t, tx.Rollback(context.Background())) })
-		recorder.Reset()
-		b := &pgx.Batch{}
-		b.Queue("select 1")
-		want := "select 1 /*application='api'*/"
-
-		// Act
-		err = tx.SendBatch(context.Background(), b).Close()
-
-		// Assert
-		require.NoError(t, err)
-		require.Equal(t, want, recorder.Last(t))
-		require.Equal(t, "select 1", b.QueuedQueries[0].SQL)
-	})
+	_, err = nested.Exec(ctx, "select 1")
+	require.NoError(t, err)
+	require.Equal(t, want, recorder.last(t))
 }

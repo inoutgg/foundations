@@ -6,7 +6,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"go.inout.gg/foundations/dbsql/sqlcomment"
 	"go.inout.gg/foundations/must"
 )
 
@@ -16,7 +15,7 @@ func WithSearchPath(schema string) func(c *pgxpool.Config) {
 }
 
 // MustPool creates a new connection pool and panics on error.
-func MustPool(ctx context.Context, connString string, opts ...func(*pgxpool.Config)) DB {
+func MustPool(ctx context.Context, connString string, opts ...func(*pgxpool.Config)) *pgxpool.Pool {
 	return must.Must(NewPool(ctx, connString, opts...))
 }
 
@@ -25,7 +24,7 @@ func NewPool(
 	ctx context.Context,
 	connStr string,
 	opts ...func(*pgxpool.Config),
-) (DB, error) {
+) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -38,17 +37,13 @@ func NewPool(
 		f(cfg)
 	}
 
-	pool, err := newPool(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return sqlcomment.NewWithDefaults(pool, sqlcomment.WithDriverVerTag()), nil
+	return newPool(ctx, cfg)
 }
 
 // newPool creates a new connection pool using the provided configuration.
 func newPool(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
 	var err error
+
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("dbsql: failed to create a new database pool: %w", err)

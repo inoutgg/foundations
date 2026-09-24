@@ -7,29 +7,31 @@ import (
 
 type (
 	ctxOptions struct {
-		skip bool
 		tags Tags
+		skip bool
 	}
 	ctxKeyType struct{}
 )
 
 var ctxOptionsKey ctxKeyType //nolint:gochecknoglobals
 
-// Skip returns a new context that tells the DB wrapper to skip SQL commenting.
+// Skip returns a new context that tells the wrapper and otelc hook to skip SQL commenting.
 func Skip(ctx context.Context) context.Context {
 	c, ok := ctx.Value(ctxOptionsKey).(*ctxOptions)
 	if !ok {
-		return context.WithValue(ctx, ctxOptionsKey, &ctxOptions{skip: true})
+		return context.WithValue(ctx, ctxOptionsKey, &ctxOptions{skip: true, tags: nil})
 	}
-	c.skip = true
-	return ctx
+
+	return context.WithValue(ctx, ctxOptionsKey, &ctxOptions{skip: true, tags: c.tags})
 }
 
 // WithTag stores the key and val pair on the context.
 func WithTag(ctx context.Context, key, val string) context.Context {
 	t, ok := ctx.Value(ctxOptionsKey).(*ctxOptions)
 	if !ok {
-		return context.WithValue(ctx, ctxOptionsKey, &ctxOptions{tags: Tags{key: val}})
+		return context.WithValue(ctx, ctxOptionsKey, &ctxOptions{
+			skip: false, tags: Tags{key: val},
+		})
 	}
 
 	newTags := make(Tags, len(t.tags)+1)

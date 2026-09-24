@@ -101,5 +101,6 @@ func TestChainExtend(t *testing.T) {
 
 func TestChainImplementsMiddleware(t *testing.T) {
 	var _ Middleware = (*Chain)(nil)
+
 	require.Implements(t, (*Middleware)(nil), new(Chain))
 }

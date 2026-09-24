@@ -2,7 +2,6 @@ package sqlcomment
 
 import (
 	"context"
-	"fmt"
 	"runtime/debug"
 )
 
@@ -11,7 +10,7 @@ type driverVersionTagger struct {
 }
 
 // NewDriverVersionTagger returns a Tagger which adds the current pgx version.
-func NewDriverVersionTagger() driverVersionTagger {
+func NewDriverVersionTagger() Tagger {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return driverVersionTagger{version: "pgx"}
@@ -19,14 +18,14 @@ func NewDriverVersionTagger() driverVersionTagger {
 
 	for _, d := range info.Deps {
 		if d.Path == "github.com/jackc/pgx/v5" {
-			return driverVersionTagger{version: fmt.Sprintf("pgx:%s", d.Version)}
+			return driverVersionTagger{version: "pgx:" + d.Version}
 		}
 	}
 
 	return driverVersionTagger{version: "pgx"}
 }
 
-func (dv driverVersionTagger) Tag(ctx context.Context) Tags {
+func (dv driverVersionTagger) Tag(_ context.Context) Tags {
 	return Tags{KeyDBDriver: dv.version}
 }
 
@@ -41,10 +40,10 @@ type staticTagger struct {
 }
 
 // NewStaticTagger returns a Tagger which adds tags to every SQL comment.
-func NewStaticTagger(tags Tags) staticTagger {
+func NewStaticTagger(tags Tags) Tagger {
 	return staticTagger{tags: tags}
 }
 
-func (st staticTagger) Tag(ctx context.Context) Tags {
+func (st staticTagger) Tag(_ context.Context) Tags {
 	return st.tags
 }

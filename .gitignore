@@ -236,3 +236,5 @@ tags
 
 ### Custom binaries ###
 .build
+.otelc-build/
+otelc.runtime.go

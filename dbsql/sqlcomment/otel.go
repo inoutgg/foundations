@@ -23,6 +23,7 @@ func NewOTELTagger() OTELTagger {
 func (ot OTELTagger) Tag(ctx context.Context) Tags {
 	carrier := make(commentCarrier)
 	otel.GetTextMapPropagator().Inject(ctx, carrier)
+
 	return Tags(carrier)
 }
 
