@@ -4,16 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"go.inout.gg/foundations/dbsql/sqlcomment"
 	"go.inout.gg/foundations/must"
 )
-
-// WithTracer sets the query tracer for the database pool.
-func WithTracer(t pgx.QueryTracer) func(c *pgxpool.Config) {
-	return func(c *pgxpool.Config) { c.ConnConfig.Tracer = t }
-}
 
 // WithSearchPath sets the search path for the database pool.
 func WithSearchPath(schema string) func(c *pgxpool.Config) {
@@ -21,7 +16,7 @@ func WithSearchPath(schema string) func(c *pgxpool.Config) {
 }
 
 // MustPool creates a new connection pool and panics on error.
-func MustPool(ctx context.Context, connString string, opts ...func(*pgxpool.Config)) *pgxpool.Pool {
+func MustPool(ctx context.Context, connString string, opts ...func(*pgxpool.Config)) DB {
 	return must.Must(NewPool(ctx, connString, opts...))
 }
 
@@ -30,7 +25,7 @@ func NewPool(
 	ctx context.Context,
 	connStr string,
 	opts ...func(*pgxpool.Config),
-) (*pgxpool.Pool, error) {
+) (DB, error) {
 	cfg, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -43,11 +38,16 @@ func NewPool(
 		f(cfg)
 	}
 
-	return NewPoolWithConfig(ctx, cfg)
+	pool, err := newPool(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return sqlcomment.NewWithDefaults(pool, sqlcomment.WithDriverVerTag()), nil
 }
 
-// NewPoolWithConfig creates a new connection pool using the provided configuration.
-func NewPoolWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
+// newPool creates a new connection pool using the provided configuration.
+func newPool(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
 	var err error
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -60,12 +60,18 @@ func NewPoolWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool,
 		}
 	}()
 
-	if err = pool.Ping(ctx); err != nil {
+	err = pool.Ping(ctx)
+	if err != nil {
 		return nil, fmt.Errorf(
 			"dbsql: failed to connect to the database at %s: %w",
 			cfg.ConnString(),
 			err,
 		)
+	}
+
+	err = registerPoolMetrics(pool)
+	if err != nil {
+		return nil, err
 	}
 
 	return pool, nil

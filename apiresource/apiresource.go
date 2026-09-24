@@ -40,8 +40,8 @@ func Render[
 
 // RenderMany is similar to Render, but renders many API resources at once.
 func RenderMany[
-	TBundle any,
 	TRenderable Renderable[TBundle, TEntity, TRenderable, TParams],
+	TBundle any,
 	TEntity any,
 	TParams any,
 ](
