@@ -5,6 +5,11 @@ import (
 	"runtime/debug"
 )
 
+// Tagger supplies tags for SQL comments.
+type Tagger interface {
+	Tag(context.Context) Tags
+}
+
 type driverVersionTagger struct {
 	version string
 }
@@ -33,17 +38,4 @@ type contextTagger struct{}
 
 func (ct contextTagger) Tag(ctx context.Context) Tags {
 	return FromContext(ctx)
-}
-
-type staticTagger struct {
-	tags Tags
-}
-
-// NewStaticTagger returns a Tagger which adds tags to every SQL comment.
-func NewStaticTagger(tags Tags) Tagger {
-	return staticTagger{tags: tags}
-}
-
-func (st staticTagger) Tag(_ context.Context) Tags {
-	return st.tags
 }

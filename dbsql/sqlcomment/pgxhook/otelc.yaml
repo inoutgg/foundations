@@ -26,4 +26,4 @@ comment_pgx_batch:
   do:
     - inject_hooks:
         before: BeforeSendBatch
-        path: go.inout.gg/foundations/dbsql/sqlcomment/pgxhook
+        path: go.inout.gg/foundtions/dbsql/sqlcomment/pgxhook

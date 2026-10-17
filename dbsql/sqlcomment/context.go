@@ -15,7 +15,7 @@ type (
 
 var ctxOptionsKey ctxKeyType //nolint:gochecknoglobals
 
-// Skip returns a new context that tells the wrapper and otelc hook to skip SQL commenting.
+// Skip returns a new context that tells the otelc hook to skip SQL commenting.
 func Skip(ctx context.Context) context.Context {
 	c, ok := ctx.Value(ctxOptionsKey).(*ctxOptions)
 	if !ok {
@@ -25,33 +25,41 @@ func Skip(ctx context.Context) context.Context {
 	return context.WithValue(ctx, ctxOptionsKey, &ctxOptions{skip: true, tags: c.tags})
 }
 
-// WithTag stores the key and val pair on the context.
-func WithTag(ctx context.Context, key, val string) context.Context {
-	t, ok := ctx.Value(ctxOptionsKey).(*ctxOptions)
-	if !ok {
-		return context.WithValue(ctx, ctxOptionsKey, &ctxOptions{
-			skip: false, tags: Tags{key: val},
-		})
+// WithTags returns a new context with tags merged over any existing tags.
+// The supplied tags are copied and override values for existing keys.
+func WithTags(ctx context.Context, tags Tags) context.Context {
+	previous, _ := ctx.Value(ctxOptionsKey).(*ctxOptions)
+	size := len(tags)
+	skip := false
+
+	if previous != nil {
+		size += len(previous.tags)
+		skip = previous.skip
 	}
 
-	newTags := make(Tags, len(t.tags)+1)
-	maps.Copy(newTags, t.tags)
-	newTags[key] = val
+	merged := make(Tags, size)
+	if previous != nil {
+		maps.Copy(merged, previous.tags)
+	}
 
-	return context.WithValue(ctx, ctxOptionsKey, &ctxOptions{
-		skip: t.skip,
-		tags: newTags,
-	})
+	maps.Copy(merged, tags)
+
+	return context.WithValue(ctx, ctxOptionsKey, &ctxOptions{tags: merged, skip: skip})
 }
 
-// FromContext returns the SQL comment tags stored in ctx, if any.
+// WithTag stores a single key and value on a new context.
+func WithTag(ctx context.Context, key, val string) context.Context {
+	return WithTags(ctx, Tags{key: val})
+}
+
+// FromContext returns a copy of the SQL comment tags stored in ctx, if any.
 func FromContext(ctx context.Context) Tags {
 	t, ok := ctx.Value(ctxOptionsKey).(*ctxOptions)
 	if !ok {
 		return Tags{}
 	}
 
-	return t.tags
+	return maps.Clone(t.tags)
 }
 
 func skipFromContext(ctx context.Context) bool {

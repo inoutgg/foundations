@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"go.inout.gg/foundations/dbsql/pgxhook"
 	"go.inout.gg/foundations/must"
 )
 
@@ -19,7 +21,7 @@ func MustPool(ctx context.Context, connString string, opts ...func(*pgxpool.Conf
 	return must.Must(NewPool(ctx, connString, opts...))
 }
 
-// NewPool creates a new connection pool using the provided connection string.
+// NewPool creates a connection pool with OTel tracing unless an option sets a tracer.
 func NewPool(
 	ctx context.Context,
 	connStr string,
@@ -35,6 +37,14 @@ func NewPool(
 
 	for _, f := range opts {
 		f(cfg)
+	}
+
+	if cfg.ConnConfig.Tracer == nil {
+		cfg.ConnConfig.Tracer = otelpgx.NewTracer(
+			otelpgx.WithSpanNameCtxFunc(pgxhook.SpanNameFromContext),
+			otelpgx.WithTrimSQLInSpanName(),
+			otelpgx.WithDisableQuerySpanNamePrefix(),
+		)
 	}
 
 	return newPool(ctx, cfg)
