@@ -13,3 +13,4 @@ format:
 
 test-all:
   go test -race -count=1 -parallel=4 ./...
+  go tool otelc go test -tags=otelc -race -count=1 ./dbsql

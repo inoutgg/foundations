@@ -92,7 +92,8 @@ func (s *Server) Stop(ctx context.Context) error {
 }
 
 func (s *Server) listenAndServe(ctx context.Context) error {
-	srv := &http.Server{Handler: s.config.Handler}
+	//nolint:exhaustruct // The remaining server options use their standard defaults.
+	srv := &http.Server{Handler: s.config.Handler, ReadHeaderTimeout: 5 * time.Second}
 
 	l, err := listener(s.config.Port)
 	if err != nil {
@@ -119,13 +120,17 @@ func (s *Server) listenAndServeTLS(ctx context.Context) error {
 		return context.Background()
 	}
 
+	//nolint:exhaustruct // The remaining server options use their standard defaults.
 	srv80 := &http.Server{
-		Handler:     m.HTTPHandler(nil),
-		BaseContext: baseContext,
+		Handler:           m.HTTPHandler(nil),
+		BaseContext:       baseContext,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
+	//nolint:exhaustruct // The remaining server options use their standard defaults.
 	srv443 := &http.Server{
-		Handler:     s.config.Handler,
-		BaseContext: baseContext,
+		Handler:           s.config.Handler,
+		BaseContext:       baseContext,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	g.Go(func() error {

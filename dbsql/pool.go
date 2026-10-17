@@ -4,16 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"go.inout.gg/foundations/dbsql/pgxhook"
 	"go.inout.gg/foundations/must"
 )
-
-// WithTracer sets the query tracer for the database pool.
-func WithTracer(t pgx.QueryTracer) func(c *pgxpool.Config) {
-	return func(c *pgxpool.Config) { c.ConnConfig.Tracer = t }
-}
 
 // WithSearchPath sets the search path for the database pool.
 func WithSearchPath(schema string) func(c *pgxpool.Config) {
@@ -25,7 +21,7 @@ func MustPool(ctx context.Context, connString string, opts ...func(*pgxpool.Conf
 	return must.Must(NewPool(ctx, connString, opts...))
 }
 
-// NewPool creates a new connection pool using the provided connection string.
+// NewPool creates a connection pool with OTel tracing unless an option sets a tracer.
 func NewPool(
 	ctx context.Context,
 	connStr string,
@@ -43,12 +39,21 @@ func NewPool(
 		f(cfg)
 	}
 
-	return NewPoolWithConfig(ctx, cfg)
+	if cfg.ConnConfig.Tracer == nil {
+		cfg.ConnConfig.Tracer = otelpgx.NewTracer(
+			otelpgx.WithSpanNameCtxFunc(pgxhook.SpanNameFromContext),
+			otelpgx.WithTrimSQLInSpanName(),
+			otelpgx.WithDisableQuerySpanNamePrefix(),
+		)
+	}
+
+	return newPool(ctx, cfg)
 }
 
-// NewPoolWithConfig creates a new connection pool using the provided configuration.
-func NewPoolWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
+// newPool creates a new connection pool using the provided configuration.
+func newPool(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
 	var err error
+
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("dbsql: failed to create a new database pool: %w", err)
@@ -60,12 +65,18 @@ func NewPoolWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool,
 		}
 	}()
 
-	if err = pool.Ping(ctx); err != nil {
+	err = pool.Ping(ctx)
+	if err != nil {
 		return nil, fmt.Errorf(
 			"dbsql: failed to connect to the database at %s: %w",
 			cfg.ConnString(),
 			err,
 		)
+	}
+
+	err = registerPoolMetrics(pool)
+	if err != nil {
+		return nil, err
 	}
 
 	return pool, nil

@@ -1,7 +1,6 @@
-package dbsqlmetrics
+package dbsql
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 
@@ -9,16 +8,13 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 
-	"go.inout.gg/foundations/debug"
 	"go.inout.gg/foundations/metrics"
 	"go.inout.gg/foundations/must"
 )
 
-const (
-	name = "go.inout.gg/foundations/metrics/sqldbmetrics"
-)
+const meterName = "go.inout.gg/foundations/dbsql"
 
-type stats struct {
+type poolStats struct {
 	meter                   metric.Meter
 	acquireCount            metric.Int64ObservableCounter
 	acquiredConns           metric.Int64ObservableCounter
@@ -33,8 +29,8 @@ type stats struct {
 	totalConns              metric.Int64ObservableCounter
 }
 
-func newStats(meter metric.Meter) *stats {
-	return &stats{
+func newPoolStats(meter metric.Meter) *poolStats {
+	return &poolStats{
 		meter: meter,
 		acquireCount: must.Must(meter.Int64ObservableCounter(
 			metrics.FormatMetricName("acquire_count"),
@@ -72,11 +68,16 @@ func newStats(meter metric.Meter) *stats {
 	}
 }
 
-func (s *stats) register(pool *pgxpool.Pool) error {
+func registerPoolMetrics(pool *pgxpool.Pool) error {
+	return newPoolStats(otel.GetMeterProvider().Meter(meterName)).register(pool)
+}
+
+func (s *poolStats) register(pool *pgxpool.Pool) error {
 	_, err := s.meter.RegisterCallback(
 		func(_ context.Context, observer metric.Observer) error {
 			stats := pool.Stat()
 
+			observer.ObserveInt64(s.acquireCount, stats.AcquireCount())
 			observer.ObserveInt64(s.acquiredConns, int64(stats.AcquiredConns()))
 			observer.ObserveInt64(s.canceledAcquireCount, stats.CanceledAcquireCount())
 			observer.ObserveInt64(s.constructingConns, int64(stats.ConstructingConns()))
@@ -85,12 +86,12 @@ func (s *stats) register(pool *pgxpool.Pool) error {
 			observer.ObserveInt64(s.maxConns, int64(stats.MaxConns()))
 			observer.ObserveInt64(s.maxIdleDestroyCount, stats.MaxIdleDestroyCount())
 			observer.ObserveInt64(s.maxLifetimeDestroyCount, stats.MaxLifetimeDestroyCount())
-			observer.ObserveInt64(s.newConnsCount, stats.AcquireCount())
 			observer.ObserveInt64(s.newConnsCount, stats.NewConnsCount())
 			observer.ObserveInt64(s.totalConns, int64(stats.TotalConns()))
 
 			return nil
 		},
+		s.acquireCount,
 		s.acquiredConns,
 		s.canceledAcquireCount,
 		s.constructingConns,
@@ -103,28 +104,8 @@ func (s *stats) register(pool *pgxpool.Pool) error {
 		s.totalConns,
 	)
 	if err != nil {
-		return fmt.Errorf("dbsqlmetrics: failed to register metrics: %w", err)
+		return fmt.Errorf("dbsql: failed to register pool metrics: %w", err)
 	}
 
 	return nil
-}
-
-type Config struct {
-	Provider metric.MeterProvider
-}
-
-func (c *Config) defaults() {
-	c.Provider = cmp.Or(c.Provider, otel.GetMeterProvider())
-}
-
-func MustRegister(p *pgxpool.Pool, cfg *Config) {
-	cfg.defaults()
-	debug.Assert(cfg.Provider != nil, "provider is nil")
-
-	var (
-		provider = otel.GetMeterProvider()
-		meter    = provider.Meter(name)
-	)
-
-	must.Must1(newStats(meter).register(p))
 }

@@ -75,7 +75,7 @@
             env.GOTOOLCHAIN = lib.mkForce "local";
             env.GOFUMPT_SPLIT_LONG_LINES = lib.mkForce "on";
 
-            env.TEST_DATABASE_URL = lib.mkForce "postgres://test:test@localhost:5432/test";
+            env.PGX_TEST_DATABASE = lib.mkForce "postgres://test:test@localhost:5432/test";
             services.postgres = {
               enable = true;
               package = pkgs.postgresql_17;

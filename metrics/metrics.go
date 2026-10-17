@@ -1,9 +1,5 @@
 package metrics
 
-const (
-	prefix = "foundations."
-)
+var Prefix = "foundations" //nolint:gochecknoglobals
 
-func FormatMetricName(name string) string {
-	return prefix + name
-}
+func FormatMetricName(name string) string { return Prefix + "." + name }
